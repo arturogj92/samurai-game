@@ -2680,6 +2680,15 @@ function gameLoop(timestamp) {
     // Always render (even when paused)
     // Save context and translate for camera
     ctx.save();
+
+    // Apply mobile zoom to see more area
+    if (IS_MOBILE) {
+        // Scale from center of canvas
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.scale(MOBILE_ZOOM_FACTOR, MOBILE_ZOOM_FACTOR);
+        ctx.translate(-canvas.width / 2, -canvas.height / 2);
+    }
+
     ctx.translate(-camera.x, -camera.y);
 
     // Draw background grid
@@ -2858,11 +2867,14 @@ function isMobileDevice() {
     );
 }
 
-// Initialize mobile controls
+// Initialize mobile controls and zoom
 const mobileControls = document.getElementById('mobileControls');
-if (isMobileDevice()) {
+const IS_MOBILE = isMobileDevice();
+const MOBILE_ZOOM_FACTOR = 0.7; // 70% zoom = see more area on mobile
+
+if (IS_MOBILE) {
     mobileControls.classList.remove('hidden');
-    console.log('Mobile device detected - touch controls enabled');
+    console.log('Mobile device detected - touch controls enabled, zoom factor:', MOBILE_ZOOM_FACTOR);
 } else {
     console.log('Desktop device - keyboard controls');
 }
