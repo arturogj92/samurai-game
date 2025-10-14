@@ -389,6 +389,24 @@ body {
     color: #32CD32;
 }
 
+.vendor-tool {
+    border-color: #00FF00;
+    background: rgba(0, 255, 0, 0.1);
+}
+
+.vendor-tool .ability-key {
+    color: #00FF00;
+}
+
+.shop-tool {
+    border-color: #FFD700;
+    background: rgba(255, 215, 0, 0.1);
+}
+
+.shop-tool .ability-key {
+    color: #FFD700;
+}
+
 /* Idle Panel */
 .idle-panel {
     position: absolute;

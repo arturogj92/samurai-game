@@ -639,10 +639,34 @@ class Vendor {
         // Indicator si el jugador está cerca
         const dist = distance(ninja.x, ninja.y, this.x, this.y);
         if (dist < this.interactionRadius) {
-            ctx.fillStyle = '#00FF00';
-            ctx.font = 'bold 14px Arial';
             const spriteHeight = this.frameHeight * this.scale;
-            ctx.fillText('Presiona V para vender madera', this.x, this.y + spriteHeight / 2 + 25);
+            const textY = this.y + spriteHeight / 2 + 35;
+
+            // Show instructions based on wave break
+            ctx.textAlign = 'center';
+            if (GAME_STATE.isWaveBreak && GAME_STATE.purchasesThisWave < 2) {
+                // During wave break - show both options
+                // Shadow for better visibility
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.font = 'bold 20px "Courier New", monospace';
+                ctx.fillText('Presiona T para Tienda y V para Vender Madera', this.x + 2, textY + 2);
+
+                // Main text in gold
+                ctx.fillStyle = '#FFD700';
+                ctx.font = 'bold 20px "Courier New", monospace';
+                ctx.fillText('Presiona T para Tienda y V para Vender Madera', this.x, textY);
+            } else {
+                // Not in wave break - only show V for selling
+                // Shadow
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                ctx.font = 'bold 20px "Courier New", monospace';
+                ctx.fillText('Presiona V para Vender Madera', this.x + 2, textY + 2);
+
+                // Main text in green
+                ctx.fillStyle = '#00FF00';
+                ctx.font = 'bold 20px "Courier New", monospace';
+                ctx.fillText('Presiona V para Vender Madera', this.x, textY);
+            }
         }
     }
 
