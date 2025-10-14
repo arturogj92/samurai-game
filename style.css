@@ -531,3 +531,130 @@ body {
     transition: width 0.1s linear;
     box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
 }
+
+/* Tutorial Modal */
+.tutorial-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    animation: fadeIn 0.3s ease;
+}
+
+.tutorial-modal.hidden {
+    display: none !important;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.tutorial-content {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    border: 4px solid #00bcd4;
+    border-radius: 20px;
+    padding: 30px 40px;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 0 50px rgba(0, 188, 212, 0.7);
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateY(-50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.tutorial-content h2 {
+    font-size: 32px;
+    color: #00bcd4;
+    text-align: center;
+    margin-bottom: 25px;
+    text-shadow: 3px 3px 6px rgba(0, 188, 212, 0.5);
+}
+
+.tutorial-section {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    border-left: 4px solid #00bcd4;
+}
+
+.tutorial-section h3 {
+    font-size: 20px;
+    color: #ffd700;
+    margin-bottom: 12px;
+    text-shadow: 2px 2px 4px rgba(255, 215, 0, 0.5);
+}
+
+.tutorial-section ol {
+    margin-left: 20px;
+    line-height: 1.8;
+}
+
+.tutorial-section li {
+    font-size: 16px;
+    color: #fff;
+    margin-bottom: 8px;
+}
+
+.tutorial-section p {
+    font-size: 16px;
+    color: #fff;
+    line-height: 1.6;
+    margin-bottom: 8px;
+}
+
+.tutorial-section kbd {
+    display: inline-block;
+    padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid #00bcd4;
+    border-radius: 5px;
+    color: #00bcd4;
+    font-weight: bold;
+    font-size: 14px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.tutorial-close-btn {
+    font-family: 'TinyFont', 'Courier New', monospace;
+    width: 100%;
+    font-size: 20px;
+    padding: 15px 30px;
+    background: linear-gradient(135deg, #00ff00, #00aa00);
+    color: #000;
+    border: 3px solid #0f0;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-top: 20px;
+    transition: all 0.3s ease;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+}
+
+.tutorial-close-btn:hover {
+    background: linear-gradient(135deg, #00ff66, #00cc00);
+    transform: scale(1.05);
+    box-shadow: 0 0 30px rgba(0, 255, 0, 0.8);
+}

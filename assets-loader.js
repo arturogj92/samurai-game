@@ -31,6 +31,14 @@ const GUI_ASSETS = {
     totalToLoad: 0
 };
 
+// NPC Sprites configuration
+const NPC_SPRITES = {
+    vendor: null,
+    loaded: false,
+    loadedCount: 0,
+    totalToLoad: 0
+};
+
 // Tile pattern for procedural generation
 const TILE_PATTERN = [];
 
@@ -49,11 +57,12 @@ function isImageSafeToRender(img) {
     return true;
 }
 
-// Initialize tileset - using ONLY 2 floor tiles for uniformity
+// Initialize tileset - using multiple floor tiles for variety
 function initTileset() {
-    // Use only 2 similar floor tiles for a much more uniform look
+    // Use multiple similar floor tiles for visual variety
     const floorTiles = [
-        'Tile_03', 'Tile_04' // Only 2 tiles for maximum uniformity
+        'Tile_03', 'Tile_04', 'Tile_05', 'Tile_06', 'Tile_07',
+        'Tile_09', 'Tile_11', 'Tile_13', 'Tile_15', 'Tile_16'
     ];
 
     TILESET.totalToLoad = floorTiles.length;
@@ -64,8 +73,8 @@ function initTileset() {
             TILESET.loadedCount++;
             if (TILESET.loadedCount === TILESET.totalToLoad) {
                 TILESET.loaded = true;
-                generateUniformTilePattern();
-                console.log('✓ Uniform tileset loaded successfully');
+                generateVariedTilePattern();
+                console.log(`✓ Varied tileset loaded successfully (${floorTiles.length} tiles)`);
             }
         };
         img.onerror = () => {
@@ -77,21 +86,21 @@ function initTileset() {
     });
 }
 
-// Generate a UNIFORM tile pattern with minimal variation
-function generateUniformTilePattern() {
+// Generate a VARIED tile pattern with random tiles
+function generateVariedTilePattern() {
     // Calculate how many tiles we need
     const tilesX = Math.ceil(WORLD.width / (TILESET.tileSize * TILESET.scale));
     const tilesY = Math.ceil(WORLD.height / (TILESET.tileSize * TILESET.scale));
 
     const tileNames = Object.keys(TILESET.tiles);
 
-    // Generate mostly uniform pattern with only occasional variation
+    // Generate varied pattern with random tile selection
     for (let y = 0; y < tilesY; y++) {
         TILE_PATTERN[y] = [];
         for (let x = 0; x < tilesX; x++) {
-            // 90% use first tile, 10% use second tile for subtle variation
-            const useVariation = Math.random() < 0.1;
-            TILE_PATTERN[y][x] = useVariation && tileNames[1] ? tileNames[1] : tileNames[0];
+            // Randomly pick any of the available tiles
+            const randomIndex = Math.floor(Math.random() * tileNames.length);
+            TILE_PATTERN[y][x] = tileNames[randomIndex];
         }
     }
 
@@ -101,37 +110,26 @@ function generateUniformTilePattern() {
 
 // Generate dungeon decorations (chests, barrels, torches, etc.)
 function generateDungeonDecorations() {
-    // Place decorations sparsely throughout the world
-    const decorationDensity = 0.0008; // Very sparse
-    const numDecorations = Math.floor(WORLD.width * WORLD.height * decorationDensity);
+    // Clear existing decorations
+    DUNGEON_DECORATIONS.length = 0;
 
-    for (let i = 0; i < numDecorations; i++) {
-        const x = Math.random() * WORLD.width;
-        const y = Math.random() * WORLD.height;
+    // Add 20 torches distributed across the map (SIMPLE - no extra effects)
+    const numTorches = 20;
+    const margin = 200; // Keep torches away from edges
 
-        // Randomly choose decoration type
-        const rand = Math.random();
-        let decorationType;
-
-        if (rand < 0.4) {
-            decorationType = 'torch'; // 40% torches
-        } else if (rand < 0.6) {
-            decorationType = 'chest'; // 20% chests
-        } else if (rand < 0.75) {
-            decorationType = 'barrel'; // 15% barrels
-        } else {
-            decorationType = 'skeleton'; // 25% skulls/bones
-        }
+    for (let i = 0; i < numTorches; i++) {
+        const x = margin + Math.random() * (WORLD.width - margin * 2);
+        const y = margin + Math.random() * (WORLD.height - margin * 2);
 
         DUNGEON_DECORATIONS.push({
+            type: 'torch',
             x: x,
             y: y,
-            type: decorationType,
-            scale: 2.5
+            scale: 2 // Scale up the torch sprite
         });
     }
 
-    console.log(`✓ Generated ${DUNGEON_DECORATIONS.length} dungeon decorations`);
+    console.log(`✓ Generated ${numTorches} simple torches in dungeon`);
 }
 
 // Initialize dungeon objects
@@ -141,6 +139,7 @@ function initDungeonObjects() {
         { type: 'static', name: 'chest', path: 'assets/2 Dungeon Tileset/3 Animated objects/Chest1_D.png' },
         { type: 'static', name: 'barrel', path: 'assets/2 Dungeon Tileset/2 Objects/Boxes/Box1.png' },
         { type: 'static', name: 'skeleton', path: 'assets/2 Dungeon Tileset/2 Objects/Other/Bone1.png' },
+        { type: 'static', name: 'torch', path: 'assets/2 Dungeon Tileset/2 Objects/Torches/1.png' },
         // Animated objects
         { type: 'animated', name: 'fire', path: 'assets/2 Dungeon Tileset/3 Animated objects/Fire1.png', frames: 6, fps: 12 }
     ];
@@ -219,6 +218,26 @@ function initGUIAssets() {
     });
 }
 
+// Initialize NPC sprites
+function initNPCSprites() {
+    NPC_SPRITES.totalToLoad = 1;
+
+    const vendorSprite = new Image();
+    vendorSprite.onload = () => {
+        NPC_SPRITES.loadedCount++;
+        if (NPC_SPRITES.loadedCount === NPC_SPRITES.totalToLoad) {
+            NPC_SPRITES.loaded = true;
+            console.log('✓ NPC sprites loaded successfully');
+        }
+    };
+    vendorSprite.onerror = () => {
+        console.error('Failed to load vendor sprite');
+        NPC_SPRITES.loadedCount++;
+    };
+    vendorSprite.src = 'assets/Samurai_Commander/Idle.png';
+    NPC_SPRITES.vendor = vendorSprite;
+}
+
 // Update animated objects
 function updateAnimatedObjects(deltaTime) {
     // Update fire animation
@@ -286,31 +305,17 @@ function drawDungeonDecorations(ctx, camera) {
         }
 
         if (decoration.type === 'torch') {
-            // Draw torch with animated fire on top
-            const fire = DUNGEON_OBJECTS.animated['fire'];
-            if (fire && isImageSafeToRender(fire.image)) {
-                const frameWidth = fire.image.width / fire.frames;
-                const frameHeight = fire.image.height;
+            // Draw only the torch sprite from Torches folder (no extra fire)
+            const torchSprite = DUNGEON_OBJECTS.static['torch'];
+            if (isImageSafeToRender(torchSprite)) {
                 const scale = decoration.scale;
-
                 ctx.drawImage(
-                    fire.image,
-                    fire.currentFrame * frameWidth, 0, // Source x, y
-                    frameWidth, frameHeight, // Source width, height
-                    decoration.x - (frameWidth * scale) / 2,
-                    decoration.y - (frameHeight * scale) / 2,
-                    frameWidth * scale,
-                    frameHeight * scale
+                    torchSprite,
+                    decoration.x - (torchSprite.width * scale) / 2,
+                    decoration.y - (torchSprite.height * scale) / 2,
+                    torchSprite.width * scale,
+                    torchSprite.height * scale
                 );
-
-                // Add glow effect for torches
-                ctx.save();
-                ctx.globalAlpha = 0.3;
-                ctx.fillStyle = '#FFA500';
-                ctx.beginPath();
-                ctx.arc(decoration.x, decoration.y, 30, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.restore();
             }
         } else {
             // Draw static objects
@@ -329,35 +334,10 @@ function drawDungeonDecorations(ctx, camera) {
     }
 }
 
-// Draw GUI health bar using sprites
+// Draw GUI health bar using sprites - DISABLED, use simple red bar instead
 function drawGUIHealthBar(ctx, x, y, currentHealth, maxHealth, width, height) {
-    if (!GUI_ASSETS.loaded) {
-        return false;
-    }
-
-    const healthPercentage = currentHealth / maxHealth;
-
-    // Draw background bar
-    const bgBar = GUI_ASSETS.bars['BarTile_01'];
-    if (isImageSafeToRender(bgBar)) {
-        ctx.drawImage(bgBar, x, y, width, height);
-    }
-
-    // Draw health fill
-    const fillBar = GUI_ASSETS.bars['BarTile_03'];
-    if (isImageSafeToRender(fillBar) && healthPercentage > 0) {
-        const fillWidth = width * healthPercentage;
-        const sourceWidth = fillBar.width * healthPercentage;
-        ctx.drawImage(
-            fillBar,
-            0, 0,
-            sourceWidth, fillBar.height,
-            x, y,
-            fillWidth, height
-        );
-    }
-
-    return true;
+    // Force fallback to simple red bar
+    return false;
 }
 
 // Initialize all assets
@@ -366,6 +346,7 @@ function initAllAssets() {
     initTileset();
     initDungeonObjects();
     initGUIAssets();
+    initNPCSprites();
 }
 
 // Call initialization when script loads

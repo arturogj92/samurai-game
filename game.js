@@ -276,30 +276,30 @@ class FloorTile {
 // Generate decorative tiles for the world
 function generateFloorTiles() {
     const tiles = [];
+    const density = 2000; // VERY high spacing (2000px between potential tiles)
+    const spawnChance = 0.02; // Only 2% chance to spawn - VERY RARE
 
-    // Manual placement - ONLY these specific tiles, nothing else!
-    const manualTiles = [
-        // 2 campfires (rare)
-        { x: 1200, y: 800, type: 'campfire' },
-        { x: 2000, y: 1600, type: 'campfire' },
+    // Grid-based generation with camera culling in mind
+    for (let x = 0; x < WORLD.width; x += density) {
+        for (let y = 0; y < WORLD.height; y += density) {
+            // Random chance to spawn a tile
+            if (Math.random() < spawnChance) {
+                // Random offset within grid cell
+                const offsetX = (Math.random() - 0.5) * density * 0.8;
+                const offsetY = (Math.random() - 0.5) * density * 0.8;
+                const tileX = x + offsetX;
+                const tileY = y + offsetY;
 
-        // 2 chests (rare)
-        { x: 800, y: 1200, type: 'chest' },
-        { x: 2400, y: 600, type: 'chest' },
+                // Only subtle decorations (NO campfires or chests)
+                const tileTypes = ['rock', 'crack', 'grass', 'bush', 'stone'];
+                const randomType = tileTypes[Math.floor(Math.random() * tileTypes.length)];
 
-        // A few common decorations (5 total)
-        { x: 500, y: 500, type: 'rock' },
-        { x: 1600, y: 1000, type: 'bush' },
-        { x: 2800, y: 1800, type: 'grass' },
-        { x: 1000, y: 2000, type: 'rock' },
-        { x: 2200, y: 400, type: 'grass' }
-    ];
-
-    // Add all manual tiles
-    for (let tile of manualTiles) {
-        tiles.push(new FloorTile(tile.x, tile.y, tile.type));
+                tiles.push(new FloorTile(tileX, tileY, randomType));
+            }
+        }
     }
 
+    console.log(`Generated ${tiles.length} decorative floor tiles`);
     return tiles;
 }
 
@@ -468,17 +468,17 @@ function initSprites() {
     SPRITES.ninjaMonk.dead = new SpriteAnimator('assets/Ninja_Monk/Dead.png', 128, 128, 7, 8);
 
     // Ninja Peasant sprites
-    SPRITES.ninjaPeasant.idle = new SpriteAnimator('assets/Ninja_Peasant/Idle.png', 128, 128, 9, 8);
-    SPRITES.ninjaPeasant.walk = new SpriteAnimator('assets/Ninja_Peasant/Walk.png', 128, 128, 8, 12);
-    SPRITES.ninjaPeasant.run = new SpriteAnimator('assets/Ninja_Peasant/Run.png', 128, 128, 8, 15);
-    SPRITES.ninjaPeasant.attack1 = new SpriteAnimator('assets/Ninja_Peasant/Attack_1.png', 128, 128, 6, 12);
-    SPRITES.ninjaPeasant.attack2 = new SpriteAnimator('assets/Ninja_Peasant/Attack_2.png', 128, 128, 6, 12);
-    SPRITES.ninjaPeasant.shot = new SpriteAnimator('assets/Ninja_Peasant/Shot.png', 128, 128, 4, 15);
-    SPRITES.ninjaPeasant.hurt = new SpriteAnimator('assets/Ninja_Peasant/Hurt.png', 128, 128, 3, 8);
-    SPRITES.ninjaPeasant.dead = new SpriteAnimator('assets/Ninja_Peasant/Dead.png', 128, 128, 10, 8);
+    SPRITES.ninjaPeasant.idle = new SpriteAnimator('assets/Ninja_Peasant/Idle.png', 96, 96, 6, 8);
+    SPRITES.ninjaPeasant.walk = new SpriteAnimator('assets/Ninja_Peasant/Walk.png', 96, 96, 8, 12);
+    SPRITES.ninjaPeasant.run = new SpriteAnimator('assets/Ninja_Peasant/Run.png', 96, 96, 6, 15);
+    SPRITES.ninjaPeasant.attack1 = new SpriteAnimator('assets/Ninja_Peasant/Attack_1.png', 96, 96, 6, 12);
+    SPRITES.ninjaPeasant.attack2 = new SpriteAnimator('assets/Ninja_Peasant/Attack_2.png', 96, 96, 4, 12);
+    SPRITES.ninjaPeasant.shot = new SpriteAnimator('assets/Ninja_Peasant/Shot.png', 96, 96, 6, 15);
+    SPRITES.ninjaPeasant.hurt = new SpriteAnimator('assets/Ninja_Peasant/Hurt.png', 96, 96, 2, 8);
+    SPRITES.ninjaPeasant.dead = new SpriteAnimator('assets/Ninja_Peasant/Dead.png', 96, 96, 4, 8);
 
     // Samurai Archer sprites (player)
-    SPRITES.samuraiArcher.idle = new SpriteAnimator('assets/Samurai_Archer/Idle.png', 128, 128, 10, 8);
+    SPRITES.samuraiArcher.idle = new SpriteAnimator('assets/Samurai_Archer/Idle.png', 128, 128, 9, 8); // Fixed: 1152/128 = 9 frames
     SPRITES.samuraiArcher.walk = new SpriteAnimator('assets/Samurai_Archer/Walk.png', 128, 128, 8, 12);
     SPRITES.samuraiArcher.run = new SpriteAnimator('assets/Samurai_Archer/Run.png', 128, 128, 8, 15);
     SPRITES.samuraiArcher.attack1 = new SpriteAnimator('assets/Samurai_Archer/Attack_1.png', 128, 128, 4, 12);
@@ -531,7 +531,7 @@ const GAME_STATE = {
     resources: {
         bambooSeeds: 5,  // Semillas de bambú - Start with 5
         wood: 0,         // Madera
-        gold: 50         // Oro - Start with 50
+        gold: 0          // Oro - Only obtainable by selling wood to vendor
     },
 
     // Modos de herramienta
@@ -549,49 +549,100 @@ class Vendor {
         // Spawn en una posición fija del mundo
         this.x = WORLD.width / 2 + 300;
         this.y = WORLD.height / 2;
-        this.size = 20;
+        this.size = 32; // Sprite size
         this.interactionRadius = 80;
+        this.scale = 1.5; // Smaller sprite scale
+        this.frameWidth = 128; // Samurai_Commander sprite frame width
+        this.frameHeight = 128; // Samurai_Commander sprite frame height
+        this.currentFrame = 0;
+        this.frameTimer = 0;
+        this.totalFrames = 5; // Idle animation has 5 frames (640px / 128px = 5)
+        this.fps = 6; // Smooth animation speed
+    }
+
+    update(deltaTime) {
+        // Animate the vendor sprite smoothly
+        this.frameTimer += deltaTime;
+        const frameDelay = 1000 / this.fps;
+
+        if (this.frameTimer >= frameDelay) {
+            this.currentFrame = (this.currentFrame + 1) % this.totalFrames;
+            this.frameTimer = 0;
+        }
     }
 
     draw() {
-        // Cuerpo del vendedor
-        ctx.fillStyle = '#8B4513';
-        ctx.fillRect(this.x - 10, this.y - 30, 20, 30);
+        // Draw vendor sprite if loaded
+        if (typeof NPC_SPRITES !== 'undefined' && NPC_SPRITES.loaded && NPC_SPRITES.vendor) {
+            const sprite = NPC_SPRITES.vendor;
+            const spriteWidth = this.frameWidth * this.scale;
+            const spriteHeight = this.frameHeight * this.scale;
 
-        // Cabeza
-        ctx.fillStyle = '#FFD700';
-        ctx.beginPath();
-        ctx.arc(this.x, this.y - 35, 10, 0, Math.PI * 2);
-        ctx.fill();
+            // Calculate if player is to the left or right of vendor
+            const playerToLeft = ninja.x < this.x;
 
-        // Puesto/mesa
-        ctx.fillStyle = '#654321';
-        ctx.fillRect(this.x - 25, this.y, 50, 10);
-        ctx.fillRect(this.x - 30, this.y - 40, 5, 40); // Poste izq
-        ctx.fillRect(this.x + 25, this.y - 40, 5, 40); // Poste der
+            // Save context state before flipping
+            ctx.save();
 
-        // Toldo
-        ctx.fillStyle = '#FF6347';
-        ctx.beginPath();
-        ctx.moveTo(this.x - 35, this.y - 40);
-        ctx.lineTo(this.x + 35, this.y - 40);
-        ctx.lineTo(this.x + 30, this.y - 50);
-        ctx.lineTo(this.x - 30, this.y - 50);
-        ctx.closePath();
-        ctx.fill();
+            // Flip sprite horizontally if player is to the left
+            if (playerToLeft) {
+                ctx.translate(this.x * 2, 0);
+                ctx.scale(-1, 1);
+            }
 
-        // Texto
-        ctx.fillStyle = '#FFD700';
-        ctx.font = 'bold 12px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('🪙 VENDEDOR', this.x, this.y - 55);
+            ctx.drawImage(
+                sprite,
+                this.currentFrame * this.frameWidth, 0, // Source x, y
+                this.frameWidth, this.frameHeight, // Source width, height
+                this.x - spriteWidth / 2,
+                this.y - spriteHeight / 2,
+                spriteWidth,
+                spriteHeight
+            );
+
+            // Restore context state
+            ctx.restore();
+
+            // Texto - positioned clearly below sprite with shadow
+            ctx.textAlign = 'center';
+            // Shadow for better visibility
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.font = 'bold 20px "Courier New", monospace';
+            ctx.fillText('🪙 VENDEDOR', this.x + 2, this.y + spriteHeight / 2 + 22);
+            // Main text
+            ctx.fillStyle = '#FFD700';
+            ctx.font = 'bold 20px "Courier New", monospace';
+            ctx.fillText('🪙 VENDEDOR', this.x, this.y + spriteHeight / 2 + 20);
+        } else {
+            // Fallback: simple shape if sprite not loaded
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(this.x - 10, this.y - 30, 20, 30);
+
+            // Cabeza
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y - 35, 10, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Texto - positioned below with shadow
+            ctx.textAlign = 'center';
+            // Shadow for better visibility
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.font = 'bold 20px "Courier New", monospace';
+            ctx.fillText('🪙 VENDEDOR', this.x + 2, this.y + 47);
+            // Main text
+            ctx.fillStyle = '#FFD700';
+            ctx.font = 'bold 20px "Courier New", monospace';
+            ctx.fillText('🪙 VENDEDOR', this.x, this.y + 45);
+        }
 
         // Indicator si el jugador está cerca
         const dist = distance(ninja.x, ninja.y, this.x, this.y);
         if (dist < this.interactionRadius) {
             ctx.fillStyle = '#00FF00';
             ctx.font = 'bold 14px Arial';
-            ctx.fillText('Presiona V para vender madera', this.x, this.y + 25);
+            const spriteHeight = this.frameHeight * this.scale;
+            ctx.fillText('Presiona V para vender madera', this.x, this.y + spriteHeight / 2 + 25);
         }
     }
 
@@ -934,7 +985,7 @@ class Ninja {
         this.x = x;
         this.y = y;
         this.size = 35; // Hitbox size (smaller than sprite)
-        this.spriteScale = 0.8; // Scale down the 128x128 sprites (increased from 0.6)
+        this.spriteScale = 1.0; // Full size 128x128 sprites
         this.speed = 3; // Reduced from 5 to 3
         this.keys = {};
         this.shielded = false;
@@ -948,7 +999,7 @@ class Ninja {
 
         // Player gets its OWN sprite instances to prevent any sharing issues
         this.sprites = {
-            idle: new SpriteAnimator('assets/Samurai_Archer/Idle.png', 128, 128, 10, 8),
+            idle: new SpriteAnimator('assets/Samurai_Archer/Idle.png', 128, 128, 9, 8), // Fixed: 1152/128 = 9 frames
             walk: new SpriteAnimator('assets/Samurai_Archer/Walk.png', 128, 128, 8, 12),
             run: new SpriteAnimator('assets/Samurai_Archer/Run.png', 128, 128, 8, 15),
             shot: new SpriteAnimator('assets/Samurai_Archer/Shot.png', 128, 128, 14, 15),
@@ -1053,8 +1104,9 @@ class Ninja {
                 isMoving = true;
             }
 
-            // Update facing direction
-            if (moveX !== 0) {
+            // Update facing direction based on movement (but only when not attacking)
+            // When attacking, shooting direction takes priority
+            if (moveX !== 0 && !this.isAttacking) {
                 this.facingRight = moveX > 0;
             }
 
@@ -1197,11 +1249,11 @@ class Ninja {
             ctx.fill();
         }
 
-        // Draw health bar below character
+        // Draw health bar above character
         const barWidth = 60;
         const barHeight = 8;
         const barX = this.x - barWidth / 2;
-        const barY = this.y + 45; // Position below the sprite
+        const barY = this.y - 70; // Position above the sprite
 
         // Background (black with border)
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
@@ -1214,17 +1266,9 @@ class Ninja {
         const healthPercentage = this.health / this.maxHealth;
         const fillWidth = barWidth * healthPercentage;
 
-        // Color based on health percentage
-        let healthColor;
-        if (healthPercentage <= 0.25) {
-            healthColor = '#8B0000'; // Dark red
-        } else if (healthPercentage <= 0.5) {
-            healthColor = '#FF4500'; // Orange-red
-        } else {
-            healthColor = '#ff0000'; // Normal red
-        }
-
-        ctx.fillStyle = healthColor;
+        // Always red color
+        ctx.fillStyle = '#ff0000';
+        if (Math.random() < 0.01) console.log('✅ NEW CODE: Red health bar at Y=' + Math.round(barY));
         ctx.fillRect(barX, barY, fillWidth, barHeight);
 
         // Debug: Draw hitbox (optional, can be removed)
@@ -1265,21 +1309,24 @@ class Shuriken {
 
     draw() {
         if (arrowSprite && arrowSprite.complete) {
-            // Draw arrow sprite rotated towards direction (LARGER with strong yellow glow)
+            // Draw arrow sprite rotated towards direction (OPTIMIZED: no shadowBlur for performance)
             ctx.save();
             ctx.translate(this.x, this.y);
             ctx.rotate(this.angle);
 
-            // Draw the arrow sprite MUCH LARGER (80x80 for better visibility)
-            const arrowWidth = 80;
-            const arrowHeight = 80;
+            // Draw the arrow sprite (120x120 - balanced size for good visibility)
+            const arrowWidth = 120;
+            const arrowHeight = 120;
 
-            // STRONG yellow glow (increased shadowBlur for better visibility)
-            ctx.shadowColor = '#FFD700';
-            ctx.shadowBlur = 25;
+            // Draw yellow glow circle behind arrow (performance-friendly alternative to shadowBlur)
+            ctx.globalAlpha = 0.3;
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.arc(0, 0, arrowWidth * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw the arrow
             ctx.globalAlpha = 1.0;
-
-            // Tint the arrow white
             ctx.filter = 'brightness(2) saturate(0)';
             ctx.drawImage(
                 arrowSprite,
@@ -1292,35 +1339,40 @@ class Shuriken {
 
             ctx.restore();
         } else {
-            // Fallback: draw simple white arrow shape LARGER (optimized)
+            // Fallback: draw simple white arrow shape with yellow glow
             ctx.save();
             ctx.translate(this.x, this.y);
             ctx.rotate(this.angle);
 
-            // STRONG yellow glow (increased shadowBlur)
-            ctx.shadowColor = '#FFD700';
-            ctx.shadowBlur = 25;
+            // Draw yellow glow circle behind arrow (performance-friendly)
+            ctx.globalAlpha = 0.3;
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.arc(0, 0, 48, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw the arrow
             ctx.globalAlpha = 1.0;
 
-            // Arrow shaft (white) - BIGGER
+            // Arrow shaft (white) - BALANCED SIZE
             ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(-24, -3, 40, 6);
+            ctx.fillRect(-36, -4.5, 60, 9);
 
-            // Arrow head (white) - BIGGER
+            // Arrow head (white) - BALANCED SIZE
             ctx.fillStyle = '#FFFFFF';
             ctx.beginPath();
-            ctx.moveTo(16, 0);
-            ctx.lineTo(8, -7);
-            ctx.lineTo(8, 7);
+            ctx.moveTo(24, 0);
+            ctx.lineTo(12, -10.5);
+            ctx.lineTo(12, 10.5);
             ctx.closePath();
             ctx.fill();
 
-            // Arrow feathers (white with slight blue tint) - BIGGER
+            // Arrow feathers (white with slight blue tint) - BALANCED SIZE
             ctx.fillStyle = '#E0F0FF';
             ctx.beginPath();
-            ctx.moveTo(-24, 0);
-            ctx.lineTo(-29, -4);
-            ctx.lineTo(-29, 4);
+            ctx.moveTo(-36, 0);
+            ctx.lineTo(-43.5, -6);
+            ctx.lineTo(-43.5, 6);
             ctx.closePath();
             ctx.fill();
 
@@ -1340,7 +1392,7 @@ class Enemy {
         this.x = x;
         this.y = y;
         this.size = 30; // Hitbox size (increased from 25)
-        this.spriteScale = 0.65; // Scale up sprites (was 0.5)
+        this.spriteScale = 0.85; // Scale up sprites (larger for better visibility)
         this.speed = 2.0;
         this.health = 1;
 
@@ -1682,7 +1734,9 @@ class Bamboo {
         this.wavesToGrow = Math.floor(Math.random() * 3) + 1; // 1, 2, or 3
         this.matureWave = this.plantedWave + this.wavesToGrow;
         this.hits = 0; // Golpes recibidos
-        this.maxHits = 3; // Golpes necesarios para talar
+        this.maxHits = 1; // Golpes necesarios para talar - un solo golpe para claridad visual
+        this.shakeTime = 0; // Timestamp del último golpe
+        this.shakeDuration = 300; // Duración del shake en ms
     }
 
     update(currentWave) {
@@ -1707,32 +1761,48 @@ class Bamboo {
 
     hit() {
         this.hits++;
+        this.shakeTime = performance.now(); // Registrar tiempo del golpe para animación
         return this.hits >= this.maxHits;
     }
 
     draw() {
         const currentStage = this.getGrowthStage(GAME_STATE.wave);
 
+        // Aplicar efecto de shake cuando es golpeado
+        let shakeX = 0;
+        let shakeY = 0;
+        const timeSinceHit = performance.now() - this.shakeTime;
+
+        if (timeSinceHit < this.shakeDuration) {
+            const shakeIntensity = 5 * (1 - timeSinceHit / this.shakeDuration); // Disminuye con el tiempo
+            shakeX = (Math.random() - 0.5) * shakeIntensity;
+            shakeY = (Math.random() - 0.5) * shakeIntensity;
+        }
+
+        // Guardar contexto para aplicar shake
+        ctx.save();
+        ctx.translate(shakeX, shakeY);
+
         if (currentStage === 'seed') {
-            // Etapa 1: Semilla/brote pequeño
+            // Etapa 1: Semilla/brote pequeño (MUCHO MÁS GRANDE)
             ctx.fillStyle = '#8B4513'; // Marrón tierra
             ctx.beginPath();
-            ctx.arc(this.x, this.y, 5, 0, Math.PI * 2);
+            ctx.arc(this.x, this.y, 12, 0, Math.PI * 2);
             ctx.fill();
 
-            // Brote verde pequeño
+            // Brote verde pequeño (más grande)
             ctx.fillStyle = '#90EE90';
             ctx.beginPath();
-            ctx.moveTo(this.x, this.y - 5);
-            ctx.lineTo(this.x - 3, this.y);
-            ctx.lineTo(this.x + 3, this.y);
+            ctx.moveTo(this.x, this.y - 12);
+            ctx.lineTo(this.x - 8, this.y);
+            ctx.lineTo(this.x + 8, this.y);
             ctx.closePath();
             ctx.fill();
 
         } else if (currentStage === 'growing') {
-            // Etapa 2: Creciendo - mediano
-            const height = 25;
-            const width = 4;
+            // Etapa 2: Creciendo - mediano (MUCHO MÁS GRANDE)
+            const height = 50;
+            const width = 8;
 
             // Tallo mediano
             ctx.fillStyle = '#7CFC00'; // Verde lima
@@ -1740,27 +1810,27 @@ class Bamboo {
 
             // Segmentos
             ctx.strokeStyle = '#228B22';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 3;
             for (let i = 0; i < 2; i++) {
                 ctx.beginPath();
-                ctx.moveTo(this.x - 4, this.y - (i * 12) - 5);
-                ctx.lineTo(this.x + 4, this.y - (i * 12) - 5);
+                ctx.moveTo(this.x - 8, this.y - (i * 24) - 10);
+                ctx.lineTo(this.x + 8, this.y - (i * 24) - 10);
                 ctx.stroke();
             }
 
-            // Hojas pequeñas
+            // Hojas pequeñas (más grandes)
             ctx.fillStyle = '#32CD32';
             ctx.beginPath();
-            ctx.ellipse(this.x - 6, this.y - height, 6, 3, Math.PI / 4, 0, Math.PI * 2);
+            ctx.ellipse(this.x - 12, this.y - height, 12, 6, Math.PI / 4, 0, Math.PI * 2);
             ctx.fill();
             ctx.beginPath();
-            ctx.ellipse(this.x + 6, this.y - height, 6, 3, -Math.PI / 4, 0, Math.PI * 2);
+            ctx.ellipse(this.x + 12, this.y - height, 12, 6, -Math.PI / 4, 0, Math.PI * 2);
             ctx.fill();
 
         } else {
-            // Etapa 3: Maduro - grande y completo
-            const height = 45;
-            const width = 6;
+            // Etapa 3: Maduro - grande y completo (MUCHO MÁS GRANDE)
+            const height = 90;
+            const width = 12;
 
             // Tallo grande
             ctx.fillStyle = '#228B22'; // Verde oscuro
@@ -1768,29 +1838,29 @@ class Bamboo {
 
             // Segmentos
             ctx.strokeStyle = '#1C6E1C';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 3;
             for (let i = 0; i < 3; i++) {
                 ctx.beginPath();
-                ctx.moveTo(this.x - 6, this.y - (i * 15) - 8);
-                ctx.lineTo(this.x + 6, this.y - (i * 15) - 8);
+                ctx.moveTo(this.x - 12, this.y - (i * 30) - 15);
+                ctx.lineTo(this.x + 12, this.y - (i * 30) - 15);
                 ctx.stroke();
             }
 
-            // Hojas grandes
+            // Hojas grandes (mucho más grandes)
             ctx.fillStyle = '#32CD32';
             for (let i = 0; i < 4; i++) {
                 const angle = (i * Math.PI) / 2;
-                const offsetX = Math.cos(angle) * 10;
-                const offsetY = Math.sin(angle) * 5;
+                const offsetX = Math.cos(angle) * 18;
+                const offsetY = Math.sin(angle) * 10;
                 ctx.beginPath();
-                ctx.ellipse(this.x + offsetX, this.y - height + offsetY, 8, 4, angle, 0, Math.PI * 2);
+                ctx.ellipse(this.x + offsetX, this.y - height + offsetY, 14, 8, angle, 0, Math.PI * 2);
                 ctx.fill();
             }
 
-            // Indicador listo para talar
+            // Indicador listo para talar (más grande)
             ctx.fillStyle = '#FFD700';
-            ctx.font = 'bold 14px Arial';
-            ctx.fillText('✓', this.x - 7, this.y - height - 5);
+            ctx.font = 'bold 20px Arial';
+            ctx.fillText('✓', this.x - 10, this.y - height - 8);
         }
 
         // Mostrar indicador de golpes si está siendo talado
@@ -1799,6 +1869,9 @@ class Bamboo {
             ctx.font = 'bold 12px Arial';
             ctx.fillText(`${this.hits}/${this.maxHits}`, this.x - 12, this.y + 15);
         }
+
+        // Restaurar contexto después del shake
+        ctx.restore();
     }
 }
 
@@ -1807,12 +1880,183 @@ class WoodDrop {
     constructor(x, y) {
         this.x = x;
         this.y = y;
-        this.size = 8;
+        this.size = 18; // Aumentado de 8 a 18 para mejor visibilidad
         this.collected = false;
+        this.spawnTime = performance.now();
+        this.lifetime = 30000; // 30 seconds before auto-despawn
+
+        // Física: Velocidad inicial en dirección aleatoria
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 6 + Math.random() * 8; // Velocidad aleatoria entre 6-14 (más disparada)
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+        this.friction = 0.92; // Desaceleración
+        this.hasSettled = false; // Solo activar imán cuando la madera ha caído al suelo
+    }
+
+    update(playerX, playerY) {
+        const magnetRange = 120; // Rango de atracción magnética
+        const dist = distance(this.x, this.y, playerX, playerY);
+
+        // Si aún no se ha asentado, aplicar fricción para detenerse
+        if (!this.hasSettled) {
+            this.vx *= this.friction;
+            this.vy *= this.friction;
+
+            // Detectar cuando la madera se ha detenido (ha "caído al suelo")
+            const currentSpeed = Math.sqrt(this.vx ** 2 + this.vy ** 2);
+            if (currentSpeed < 0.1) {
+                this.hasSettled = true;
+                this.vx = 0;
+                this.vy = 0;
+            }
+        }
+
+        // Efecto imán: solo funciona DESPUÉS de que la madera ha caído al suelo
+        if (this.hasSettled && dist < magnetRange && dist > 5) {
+            // Calcular dirección hacia el jugador
+            const dx = playerX - this.x;
+            const dy = playerY - this.y;
+            const angle = Math.atan2(dy, dx);
+
+            // Fuerza de atracción aumenta cuando está más cerca
+            const attractionStrength = 0.3 + (1 - dist / magnetRange) * 0.5;
+
+            // Aplicar fuerza de atracción
+            this.vx += Math.cos(angle) * attractionStrength;
+            this.vy += Math.sin(angle) * attractionStrength;
+
+            // Limitar velocidad máxima cuando es atraída
+            const maxSpeed = 8;
+            const currentSpeed = Math.sqrt(this.vx ** 2 + this.vy ** 2);
+            if (currentSpeed > maxSpeed) {
+                this.vx = (this.vx / currentSpeed) * maxSpeed;
+                this.vy = (this.vy / currentSpeed) * maxSpeed;
+            }
+        }
+
+        // Aplicar velocidad a la posición
+        this.x += this.vx;
+        this.y += this.vy;
     }
 
     draw() {
-        // Dibujar madera
+        // Efecto de pulso para hacerla más visible
+        const timeSinceSpawn = performance.now() - this.spawnTime;
+        const pulseSpeed = 0.003;
+        const pulseScale = 1 + Math.sin(timeSinceSpawn * pulseSpeed) * 0.1;
+
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.scale(pulseScale, pulseScale);
+        ctx.translate(-this.x, -this.y);
+
+        // Glow/aura dorada alrededor de la madera
+        const glowAlpha = 0.3 + Math.sin(timeSinceSpawn * pulseSpeed) * 0.2;
+        ctx.shadowColor = '#FFD700';
+        ctx.shadowBlur = 15;
+        ctx.globalAlpha = glowAlpha;
+
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size * 1.3, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1;
+
+        // Dibujar madera principal
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(this.x - this.size, this.y - this.size/2, this.size * 2, this.size);
+
+        // Borde más grueso y visible
+        ctx.strokeStyle = '#654321';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(this.x - this.size, this.y - this.size/2, this.size * 2, this.size);
+
+        // Detalles de madera (anillos)
+        ctx.strokeStyle = '#A0522D';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 4; i++) {
+            ctx.beginPath();
+            ctx.moveTo(this.x - this.size + (i * 10), this.y - this.size/2);
+            ctx.lineTo(this.x - this.size + (i * 10), this.y + this.size/2);
+            ctx.stroke();
+        }
+
+        // Icono flotante más grande
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 20px Arial';
+        ctx.fillText('🪵', this.x - 10, this.y - 20);
+
+        ctx.restore();
+    }
+}
+
+// WoodSellParticle - Madera que vuela del jugador al vendedor
+class WoodSellParticle {
+    constructor(startX, startY, targetX, targetY) {
+        this.x = startX;
+        this.y = startY;
+        this.targetX = targetX;
+        this.targetY = targetY;
+        this.size = 12;
+        this.spawnTime = performance.now();
+        this.collected = false;
+
+        // Velocidad inicial hacia el vendedor
+        const dx = targetX - startX;
+        const dy = targetY - startY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const speed = 8;
+        this.vx = (dx / dist) * speed;
+        this.vy = (dy / dist) * speed;
+    }
+
+    update() {
+        // Efecto imán hacia el vendedor (atracción fuerte)
+        const dx = this.targetX - this.x;
+        const dy = this.targetY - this.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist > 5) {
+            const angle = Math.atan2(dy, dx);
+            const attractionStrength = 0.8; // Atracción fuerte
+
+            this.vx += Math.cos(angle) * attractionStrength;
+            this.vy += Math.sin(angle) * attractionStrength;
+
+            // Limitar velocidad
+            const maxSpeed = 15;
+            const currentSpeed = Math.sqrt(this.vx ** 2 + this.vy ** 2);
+            if (currentSpeed > maxSpeed) {
+                this.vx = (this.vx / currentSpeed) * maxSpeed;
+                this.vy = (this.vy / currentSpeed) * maxSpeed;
+            }
+
+            this.x += this.vx;
+            this.y += this.vy;
+        } else {
+            // Llegó al vendedor
+            this.collected = true;
+        }
+    }
+
+    draw() {
+        const timeSinceSpawn = performance.now() - this.spawnTime;
+        const pulseSpeed = 0.01;
+        const pulseScale = 1 + Math.sin(timeSinceSpawn * pulseSpeed) * 0.15;
+
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.scale(pulseScale, pulseScale);
+        ctx.translate(-this.x, -this.y);
+
+        // Glow brillante
+        ctx.shadowColor = '#FFD700';
+        ctx.shadowBlur = 10;
+
+        // Dibujar madera pequeña
         ctx.fillStyle = '#8B4513';
         ctx.fillRect(this.x - this.size, this.y - this.size/2, this.size * 2, this.size);
 
@@ -1821,20 +2065,55 @@ class WoodDrop {
         ctx.lineWidth = 2;
         ctx.strokeRect(this.x - this.size, this.y - this.size/2, this.size * 2, this.size);
 
-        // Detalles de madera
-        ctx.strokeStyle = '#A0522D';
-        ctx.lineWidth = 1;
-        for (let i = 0; i < 3; i++) {
-            ctx.beginPath();
-            ctx.moveTo(this.x - this.size + (i * 5), this.y - this.size/2);
-            ctx.lineTo(this.x - this.size + (i * 5), this.y + this.size/2);
-            ctx.stroke();
-        }
+        ctx.shadowBlur = 0;
 
-        // Icono flotante
+        // Icono
         ctx.fillStyle = '#FFD700';
-        ctx.font = 'bold 12px Arial';
-        ctx.fillText('🪵', this.x - 6, this.y - 15);
+        ctx.font = 'bold 16px Arial';
+        ctx.fillText('🪵', this.x - 8, this.y - 15);
+
+        ctx.restore();
+    }
+}
+
+// FloatingText - Texto flotante para mostrar oro ganado
+class FloatingText {
+    constructor(x, y, text, color = '#FFD700') {
+        this.x = x;
+        this.y = y;
+        this.text = text;
+        this.color = color;
+        this.lifetime = 0;
+        this.maxLifetime = 1500; // 1.5 segundos
+        this.vy = -2; // Velocidad hacia arriba
+        this.alpha = 1;
+    }
+
+    update(deltaTime) {
+        this.lifetime += deltaTime;
+        this.y += this.vy;
+
+        // Fade out gradualmente
+        this.alpha = 1 - (this.lifetime / this.maxLifetime);
+    }
+
+    draw() {
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        ctx.font = 'bold 24px Arial';
+        ctx.fillStyle = this.color;
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3;
+
+        // Sombra para mejor visibilidad
+        ctx.strokeText(this.text, this.x, this.y);
+        ctx.fillText(this.text, this.x, this.y);
+
+        ctx.restore();
+    }
+
+    isDead() {
+        return this.lifetime >= this.maxLifetime;
     }
 }
 
@@ -1844,6 +2123,8 @@ const shurikens = [];
 const enemies = [];
 const bamboos = [];
 const woodDrops = [];
+const woodSellParticles = []; // Partículas de madera cuando vendes
+const floatingTexts = []; // Textos flotantes (+oro, etc.)
 const bloodParticles = [];
 const bloodPuddles = []; // Permanent blood stains on ground
 
@@ -1860,6 +2141,11 @@ const SHOOTING_RANGE = 350; // pixels
 const MAX_SHURIKENS = 80;
 
 let lastFrameTime = 0;
+
+// FPS tracking
+let fps = 60;
+let frameCount = 0;
+let lastFpsUpdate = 0;
 
 // Keyboard Input
 document.addEventListener('keydown', (e) => {
@@ -1888,10 +2174,11 @@ document.addEventListener('keydown', (e) => {
             GAME_STATE.axeModeStartTime = timestamp;
         }
     } else if (key === 'v') {
-        // Vender madera al vendedor
+        // Vender madera al vendedor con animación
         if (vendor.isPlayerNear() && GAME_STATE.resources.wood > 0) {
             GAME_STATE.resources.wood--;
-            GAME_STATE.resources.gold += 10;
+            // Crear partícula de madera que vuela hacia el vendedor
+            woodSellParticles.push(new WoodSellParticle(ninja.x, ninja.y, vendor.x, vendor.y));
         }
     } else if (key === 't') {
         // Abrir/cerrar tienda
@@ -1937,6 +2224,11 @@ function distanceSquared(x1, y1, x2, y2) {
     const dx = x2 - x1;
     const dy = y2 - y1;
     return dx * dx + dy * dy;
+}
+
+// Easing function for smooth animations
+function easeOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
 }
 
 function spawnEnemy() {
@@ -1991,9 +2283,7 @@ function checkCollisions() {
                 GAME_STATE.enemiesKilled++;
                 GAME_STATE.enemiesThisWave--;
 
-                // Add gold (more gold in higher waves)
-                const goldGain = 5 + Math.floor(GAME_STATE.wave / 2);
-                GAME_STATE.resources.gold += goldGain;
+                // Gold removed - only obtainable by selling wood to vendor
 
                 // Random chance to get a bamboo seed (10% chance)
                 if (Math.random() < 0.1) {
@@ -2039,7 +2329,7 @@ function checkCollisions() {
 function checkBambooAxeCollision() {
     if (!GAME_STATE.axeMode) return;
 
-    const axeRange = 50; // Rango del hacha
+    const axeRange = 80; // Rango del hacha (aumentado para mejor jugabilidad)
 
     for (let i = bamboos.length - 1; i >= 0; i--) {
         const bamboo = bamboos[i];
@@ -2061,8 +2351,7 @@ function checkBambooAxeCollision() {
                 bamboos.splice(i, 1);
             }
 
-            // Desactivar modo hacha después del golpe
-            GAME_STATE.axeMode = false;
+            // El hacha se desactiva automáticamente al terminar la animación
             break;
         }
     }
@@ -2070,9 +2359,17 @@ function checkBambooAxeCollision() {
 
 function checkWoodPickup() {
     const pickupRange = 30;
+    const currentTime = performance.now();
 
     for (let i = woodDrops.length - 1; i >= 0; i--) {
         const wood = woodDrops[i];
+
+        // Auto-despawn after lifetime expires
+        if (currentTime - wood.spawnTime > wood.lifetime) {
+            woodDrops.splice(i, 1);
+            continue;
+        }
+
         const dist = distance(ninja.x, ninja.y, wood.x, wood.y);
 
         if (dist < pickupRange && !wood.collected) {
@@ -2164,13 +2461,15 @@ function updateHUD() {
     document.getElementById('wave').textContent = GAME_STATE.wave;
     document.getElementById('enemies').textContent = enemies.length;
 
-    // Update resources display
+    // Update resources display (with FPS and shuriken count)
     const resourcesHud = document.getElementById('resourcesHud');
     if (resourcesHud) {
         resourcesHud.innerHTML = `
             🌱 Seeds: ${GAME_STATE.resources.bambooSeeds} |
             🪵 Wood: ${GAME_STATE.resources.wood} |
-            💰 Gold: ${GAME_STATE.resources.gold}
+            💰 Gold: ${GAME_STATE.resources.gold} |
+            FPS: ${fps} |
+            Arrows: ${shurikens.length}
         `;
     }
 
@@ -2237,6 +2536,14 @@ function gameLoop(timestamp) {
     const deltaTime = timestamp - lastFrameTime;
     lastFrameTime = timestamp;
 
+    // Calculate FPS
+    frameCount++;
+    if (timestamp - lastFpsUpdate >= 1000) {
+        fps = frameCount;
+        frameCount = 0;
+        lastFpsUpdate = timestamp;
+    }
+
     // Clear canvas
     ctx.fillStyle = '#1a1a1a';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -2246,6 +2553,9 @@ function gameLoop(timestamp) {
         // Update ninja
         ninja.update(timestamp, deltaTime);
 
+        // Update vendor animation
+        vendor.update(deltaTime);
+
         // Update abilities
         ABILITIES.shield.update(timestamp);
 
@@ -2254,6 +2564,33 @@ function gameLoop(timestamp) {
 
         // Check wood pickup
         checkWoodPickup();
+
+        // Update wood drops physics (con efecto imán)
+        for (let wood of woodDrops) {
+            wood.update(ninja.x, ninja.y);
+        }
+
+        // Update wood sell particles (venta al vendedor)
+        for (let i = woodSellParticles.length - 1; i >= 0; i--) {
+            const particle = woodSellParticles[i];
+            particle.update();
+
+            // Si llegó al vendedor, dar oro y eliminar partícula
+            if (particle.collected) {
+                GAME_STATE.resources.gold += 10;
+                // Crear texto flotante mostrando el oro ganado
+                floatingTexts.push(new FloatingText(vendor.x, vendor.y - 40, '+10 💰', '#FFD700'));
+                woodSellParticles.splice(i, 1);
+            }
+        }
+
+        // Update floating texts
+        for (let i = floatingTexts.length - 1; i >= 0; i--) {
+            floatingTexts[i].update(deltaTime);
+            if (floatingTexts[i].isDead()) {
+                floatingTexts.splice(i, 1);
+            }
+        }
 
         // Update camera to follow ninja
         camera.follow(ninja);
@@ -2265,6 +2602,9 @@ function gameLoop(timestamp) {
                 // Check if enemy is within shooting range
                 const distToTarget = distance(ninja.x, ninja.y, target.x, target.y);
                 if (distToTarget <= SHOOTING_RANGE) {
+                    // Make character face the direction they're shooting
+                    ninja.facingRight = target.x > ninja.x;
+
                     shurikens.push(new Shuriken(ninja.x, ninja.y, target.x, target.y));
                     ninja.startAttack(timestamp); // Trigger attack animation
                     lastShurikenTime = timestamp;
@@ -2348,6 +2688,11 @@ function gameLoop(timestamp) {
         wood.draw();
     }
 
+    // Draw wood sell particles (madera volando al vendedor)
+    for (let particle of woodSellParticles) {
+        particle.draw();
+    }
+
     // Draw blood particles
     for (let particle of bloodParticles) {
         particle.draw();
@@ -2364,32 +2709,55 @@ function gameLoop(timestamp) {
         ctx.save();
         ctx.translate(ninja.x, ninja.y);
 
-        // Rotate axe
-        const axeRotation = (performance.now() - GAME_STATE.axeModeStartTime) * 0.01;
+        // Animación de swing/golpe (péndulo)
+        const timeSinceStart = performance.now() - GAME_STATE.axeModeStartTime;
+        const swingDuration = 300; // Duración del golpe en ms
+        const swingProgress = Math.min(timeSinceStart / swingDuration, 1);
+
+        // Desactivar hacha automáticamente al terminar la animación
+        if (swingProgress >= 1) {
+            GAME_STATE.axeMode = false;
+        }
+
+        // Ángulo del swing: de -120° a 30° (golpe de arriba hacia abajo)
+        const startAngle = -Math.PI * 0.66; // -120°
+        const endAngle = Math.PI * 0.16;    // 30°
+        const axeRotation = startAngle + (endAngle - startAngle) * easeOutCubic(swingProgress);
+
         ctx.rotate(axeRotation);
 
-        // Draw axe handle
+        // Draw axe handle (más largo)
         ctx.fillStyle = '#8B4513';
-        ctx.fillRect(-3, 0, 6, 30);
+        ctx.fillRect(-4, 0, 8, 40);
 
-        // Draw axe blade
+        // Draw axe blade (más grande y detallada)
         ctx.fillStyle = '#C0C0C0';
         ctx.beginPath();
-        ctx.moveTo(-15, 0);
-        ctx.lineTo(15, 0);
-        ctx.lineTo(10, -10);
-        ctx.lineTo(-10, -10);
+        ctx.moveTo(-20, 0);
+        ctx.lineTo(20, 0);
+        ctx.lineTo(15, -15);
+        ctx.lineTo(-15, -15);
         ctx.closePath();
         ctx.fill();
 
-        ctx.restore();
-
-        // Draw axe range indicator
-        ctx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
+        // Borde del filo
+        ctx.strokeStyle = '#A9A9A9';
         ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(ninja.x, ninja.y, 50, 0, Math.PI * 2);
         ctx.stroke();
+
+        // Efecto de brillo en el filo
+        ctx.fillStyle = '#FFFFFF';
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(-10, -8);
+        ctx.lineTo(10, -8);
+        ctx.lineTo(7, -12);
+        ctx.lineTo(-7, -12);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        ctx.restore();
     }
 
     for (let shuriken of shurikens) {
@@ -2397,6 +2765,11 @@ function gameLoop(timestamp) {
     }
     for (let enemy of enemies) {
         enemy.draw();
+    }
+
+    // Draw floating texts (encima de todo)
+    for (let text of floatingTexts) {
+        text.draw();
     }
 
     // Restore context
@@ -2435,7 +2808,7 @@ document.getElementById('continueWaveBtn').addEventListener('click', () => {
 });
 
 // Start game
-console.log('Ninja Survivor - Game Starting!');
+console.log('Samurai Survivor - Game Starting!');
 console.log(`World size: ${WORLD.width}x${WORLD.height}`);
 console.log(`Canvas size: ${canvas.width}x${canvas.height}`);
 
@@ -2445,4 +2818,26 @@ for (let i = 0; i < GAME_STATE.totalEnemiesThisWave; i++) {
     spawnEnemy();
 }
 
+// Start game loop
 requestAnimationFrame(gameLoop);
+
+// Tutorial Modal - Show only first time using localStorage
+const tutorialModal = document.getElementById('tutorialModal');
+const closeTutorialBtn = document.getElementById('closeTutorial');
+const hasSeenTutorial = localStorage.getItem('samuraiGameTutorialSeen');
+
+if (!tutorialModal || !closeTutorialBtn) {
+    console.error('Tutorial elements not found!');
+} else {
+    if (!hasSeenTutorial) {
+        // Show tutorial on first visit
+        tutorialModal.classList.remove('hidden');
+        GAME_STATE.playing = false; // Pause game while tutorial is showing
+    }
+
+    closeTutorialBtn.addEventListener('click', function() {
+        tutorialModal.classList.add('hidden');
+        localStorage.setItem('samuraiGameTutorialSeen', 'true');
+        GAME_STATE.playing = true; // Resume game
+    });
+}

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ninja Survivor</title>
+    <title>Samurai Survivor</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -57,6 +57,30 @@
                 <!-- Upgrade cards will be generated here -->
             </div>
         </div>
+        <div id="tutorialModal" class="tutorial-modal hidden">
+            <div class="tutorial-content">
+                <h2>🎮 Welcome to Samurai Survivor!</h2>
+                <div class="tutorial-section">
+                    <h3>💰 How to Earn Gold:</h3>
+                    <ol>
+                        <li><strong>Plant Bamboo</strong> - Press <kbd>P</kbd> (costs 1 seed)</li>
+                        <li><strong>Wait</strong> - Bamboo grows in <strong>1-3 waves</strong></li>
+                        <li><strong>Harvest</strong> - Press <kbd>H</kbd> to use axe (hit 3 times)</li>
+                        <li><strong>Sell Wood</strong> - Press <kbd>V</kbd> near the vendor for <strong>+10 gold</strong></li>
+                    </ol>
+                </div>
+                <div class="tutorial-section">
+                    <h3>🛒 Upgrades:</h3>
+                    <p>During wave breaks, press <kbd>T</kbd> to open the shop.</p>
+                    <p><strong>You can buy 2 upgrades per wave!</strong></p>
+                </div>
+                <div class="tutorial-section">
+                    <h3>⚔️ Combat:</h3>
+                    <p><kbd>Q</kbd> Dash | <kbd>E</kbd> Burst | <kbd>R</kbd> Shield</p>
+                </div>
+                <button id="closeTutorial" class="tutorial-close-btn">Got it! Let's Play!</button>
+            </div>
+        </div>
     </div>
     <div class="controls">
         <p>Controls: WASD or Arrow Keys to move</p>
@@ -64,8 +88,8 @@
         <p>Bamboo: P (Plant) | H (Hit bamboo 3x with Axe) | V (Sell Wood to Vendor)</p>
         <p>T (Shop - Only during wave break, max 2 purchases) | Bamboo grows in 1-3 waves</p>
     </div>
-    <script src="assets-loader.js"></script>
-    <script src="game.js"></script>
-    <script src="assets-integration.js"></script>
+    <script src="assets-loader.js?v=20251014002"></script>
+    <script src="game.js?v=20251014002"></script>
+    <script src="assets-integration.js?v=20251014003"></script>
 </body>
 </html>

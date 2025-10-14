@@ -107,40 +107,73 @@ if (typeof Ninja !== 'undefined') {
             ctx.fill();
         }
 
-        // Draw health bar below character using GUI sprites
+        // Draw health bar above character using GUI sprites
         const barWidth = 60;
         const barHeight = 10;
         const barX = this.x - barWidth / 2;
-        const barY = this.y + 45; // Position below the sprite
+        const barY = this.y - 70; // Position above the sprite
 
         // Try to use GUI health bar first
         const usedGUIBar = drawGUIHealthBar && drawGUIHealthBar(ctx, barX, barY, this.health, this.maxHealth, barWidth, barHeight);
 
-        // Fallback to original health bar if GUI not available
+        // Fallback to enhanced health bar if GUI not available
         if (!usedGUIBar) {
-            // Background (black with border)
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.fillRect(barX, barY, barWidth, barHeight);
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-            ctx.lineWidth = 1;
-            ctx.strokeRect(barX, barY, barWidth, barHeight);
-
-            // Health fill
             const healthPercentage = this.health / this.maxHealth;
             const fillWidth = barWidth * healthPercentage;
+            const cornerRadius = 4;
 
-            // Color based on health percentage
-            let healthColor;
-            if (healthPercentage <= 0.25) {
-                healthColor = '#8B0000'; // Dark red
-            } else if (healthPercentage <= 0.5) {
-                healthColor = '#FF4500'; // Orange-red
-            } else {
-                healthColor = '#ff0000'; // Normal red
+            ctx.save();
+
+            // Outer glow effect
+            ctx.shadowColor = 'rgba(255, 0, 0, 0.5)';
+            ctx.shadowBlur = 8;
+
+            // Background (dark with rounded corners)
+            ctx.fillStyle = 'rgba(20, 20, 20, 0.85)';
+            ctx.beginPath();
+            ctx.roundRect(barX, barY, barWidth, barHeight, cornerRadius);
+            ctx.fill();
+
+            ctx.shadowBlur = 0; // Reset shadow for inner elements
+
+            // Inner dark border
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(barX, barY, barWidth, barHeight, cornerRadius);
+            ctx.stroke();
+
+            // Health fill with gradient (red gradient from bright to dark)
+            if (fillWidth > 0) {
+                const gradient = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
+                gradient.addColorStop(0, '#ff4444'); // Bright red top
+                gradient.addColorStop(0.5, '#ff0000'); // Pure red middle
+                gradient.addColorStop(1, '#cc0000'); // Dark red bottom
+
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.roundRect(barX + 1, barY + 1, fillWidth - 2, barHeight - 2, cornerRadius - 1);
+                ctx.fill();
+
+                // Glossy highlight on top
+                const highlightGradient = ctx.createLinearGradient(barX, barY, barX, barY + barHeight / 2);
+                highlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
+                highlightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+                ctx.fillStyle = highlightGradient;
+                ctx.beginPath();
+                ctx.roundRect(barX + 1, barY + 1, fillWidth - 2, barHeight / 2, cornerRadius - 1);
+                ctx.fill();
             }
 
-            ctx.fillStyle = healthColor;
-            ctx.fillRect(barX, barY, fillWidth, barHeight);
+            // Outer highlight border
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.roundRect(barX + 0.5, barY + 0.5, barWidth - 1, barHeight - 1, cornerRadius);
+            ctx.stroke();
+
+            ctx.restore();
         }
 
         // Debug: Draw hitbox (optional, can be removed)
