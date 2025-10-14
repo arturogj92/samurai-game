@@ -2,12 +2,41 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
     <title>Samurai Survivor</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="game-container">
+        <!-- Mobile Touch Controls -->
+        <div id="mobileControls" class="mobile-controls hidden">
+            <!-- Movement D-Pad -->
+            <div class="dpad">
+                <button class="dpad-btn dpad-up" data-key="w">▲</button>
+                <button class="dpad-btn dpad-left" data-key="a">◄</button>
+                <button class="dpad-btn dpad-center"></button>
+                <button class="dpad-btn dpad-right" data-key="d">►</button>
+                <button class="dpad-btn dpad-down" data-key="s">▼</button>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <button class="action-btn ability-btn" data-key="q">Q<br><span>Dash</span></button>
+                <button class="action-btn ability-btn" data-key="e">E<br><span>Burst</span></button>
+                <button class="action-btn ability-btn" data-key="r">R<br><span>Shield</span></button>
+            </div>
+
+            <!-- Utility Buttons -->
+            <div class="utility-buttons">
+                <button class="utility-btn" data-key="p">P<br><span>Plant</span></button>
+                <button class="utility-btn" data-key="h">H<br><span>Axe</span></button>
+                <button class="utility-btn" data-key="v">V<br><span>Sell</span></button>
+                <button class="utility-btn" data-key="t">T<br><span>Shop</span></button>
+            </div>
+        </div>
+
         <div class="hud">
             <div class="stat">Score: <span id="score">0</span></div>
             <div class="stat">Wave: <span id="wave">1</span></div>

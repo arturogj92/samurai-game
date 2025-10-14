@@ -2845,6 +2845,85 @@ for (let i = 0; i < GAME_STATE.totalEnemiesThisWave; i++) {
 // Start game loop
 requestAnimationFrame(gameLoop);
 
+// ========================================
+// MOBILE CONTROLS
+// ========================================
+
+// Detect if device is mobile
+function isMobileDevice() {
+    return (
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+        (window.matchMedia && window.matchMedia("(max-width: 768px)").matches) ||
+        ('ontouchstart' in window)
+    );
+}
+
+// Initialize mobile controls
+const mobileControls = document.getElementById('mobileControls');
+if (isMobileDevice()) {
+    mobileControls.classList.remove('hidden');
+    console.log('Mobile device detected - touch controls enabled');
+} else {
+    console.log('Desktop device - keyboard controls');
+}
+
+// Touch event handlers for mobile controls
+function simulateKeyEvent(key, isDown) {
+    const event = new KeyboardEvent(isDown ? 'keydown' : 'keyup', {
+        key: key,
+        code: `Key${key.toUpperCase()}`,
+        bubbles: true,
+        cancelable: true
+    });
+    document.dispatchEvent(event);
+}
+
+// Setup touch controls for all buttons
+const allButtons = document.querySelectorAll('[data-key]');
+allButtons.forEach(button => {
+    const key = button.getAttribute('data-key');
+
+    // Prevent default touch behaviors
+    button.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        simulateKeyEvent(key, true);
+        button.style.opacity = '0.8';
+    }, { passive: false });
+
+    button.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        simulateKeyEvent(key, false);
+        button.style.opacity = '1';
+    }, { passive: false });
+
+    button.addEventListener('touchcancel', (e) => {
+        e.preventDefault();
+        simulateKeyEvent(key, false);
+        button.style.opacity = '1';
+    }, { passive: false });
+});
+
+// Prevent zoom on double tap for mobile
+document.addEventListener('touchstart', (e) => {
+    if (e.touches.length > 1) {
+        e.preventDefault();
+    }
+}, { passive: false });
+
+let lastTouchEnd = 0;
+document.addEventListener('touchend', (e) => {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) {
+        e.preventDefault();
+    }
+    lastTouchEnd = now;
+}, { passive: false });
+
+// Prevent pinch zoom
+document.addEventListener('gesturestart', (e) => {
+    e.preventDefault();
+});
+
 // Tutorial Modal - Show only first time using localStorage
 const tutorialModal = document.getElementById('tutorialModal');
 const closeTutorialBtn = document.getElementById('closeTutorial');

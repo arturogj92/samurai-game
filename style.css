@@ -21,6 +21,16 @@ body {
     color: #fff;
     margin: 0;
     padding: 0;
+    /* Prevent text selection on mobile */
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    /* Prevent pull-to-refresh */
+    overscroll-behavior-y: contain;
+    /* Prevent touch delay */
+    touch-action: manipulation;
 }
 
 .game-container {
@@ -110,6 +120,7 @@ body {
     background: #1a1a1a;
     width: 100%;
     height: 100%;
+    touch-action: none; /* Allow touch events but prevent browser gestures */
 }
 
 .game-over {
@@ -675,4 +686,220 @@ body {
     background: linear-gradient(135deg, #00ff66, #00cc00);
     transform: scale(1.05);
     box-shadow: 0 0 30px rgba(0, 255, 0, 0.8);
+}
+
+/* Mobile Touch Controls */
+.mobile-controls {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 15;
+}
+
+.mobile-controls.hidden {
+    display: none !important;
+}
+
+/* D-Pad (left side) */
+.dpad {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    width: 150px;
+    height: 150px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 5px;
+    pointer-events: all;
+}
+
+.dpad-btn {
+    background: rgba(255, 255, 255, 0.15);
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 24px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+    transition: all 0.1s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dpad-btn:active {
+    background: rgba(0, 255, 0, 0.3);
+    border-color: #0f0;
+    transform: scale(0.95);
+}
+
+.dpad-up { grid-column: 2; grid-row: 1; }
+.dpad-left { grid-column: 1; grid-row: 2; }
+.dpad-center { grid-column: 2; grid-row: 2; opacity: 0; pointer-events: none; }
+.dpad-right { grid-column: 3; grid-row: 2; }
+.dpad-down { grid-column: 2; grid-row: 3; }
+
+/* Action Buttons (right side) */
+.action-buttons {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: all;
+}
+
+.action-btn {
+    width: 70px;
+    height: 70px;
+    background: rgba(255, 100, 100, 0.15);
+    border: 3px solid rgba(255, 0, 0, 0.5);
+    border-radius: 50%;
+    color: #fff;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+    transition: all 0.1s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.action-btn span {
+    font-size: 10px;
+    opacity: 0.8;
+}
+
+.action-btn:active {
+    background: rgba(255, 0, 0, 0.4);
+    border-color: #f00;
+    transform: scale(0.9);
+}
+
+/* Utility Buttons (top right) */
+.utility-buttons {
+    position: absolute;
+    top: 70px;
+    right: 20px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    pointer-events: all;
+}
+
+.utility-btn {
+    width: 60px;
+    height: 60px;
+    background: rgba(255, 215, 0, 0.15);
+    border: 2px solid rgba(255, 215, 0, 0.5);
+    border-radius: 8px;
+    color: #ffd700;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+    transition: all 0.1s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.utility-btn span {
+    font-size: 9px;
+    opacity: 0.9;
+}
+
+.utility-btn:active {
+    background: rgba(255, 215, 0, 0.3);
+    border-color: #ffd700;
+    transform: scale(0.9);
+}
+
+/* Mobile-specific optimizations */
+@media (max-width: 768px) {
+    /* Make HUD more compact on mobile */
+    .hud {
+        padding: 8px 10px;
+        font-size: 14px;
+        flex-wrap: wrap;
+    }
+
+    .stat {
+        font-size: 12px;
+        margin: 2px 5px;
+    }
+
+    .abilities {
+        display: none; /* Hide desktop abilities HUD on mobile */
+    }
+
+    /* Adjust modals for mobile */
+    .game-over, .wave-break, .upgrade-menu {
+        max-width: 90%;
+        padding: 20px;
+    }
+
+    .upgrade-menu {
+        bottom: 180px; /* Make room for mobile controls */
+    }
+
+    /* Make tutorial more mobile-friendly */
+    .tutorial-content {
+        max-width: 90%;
+        padding: 20px;
+        max-height: 70vh;
+    }
+
+    .tutorial-content h2 {
+        font-size: 24px;
+    }
+
+    .tutorial-section h3 {
+        font-size: 18px;
+    }
+
+    .tutorial-section li,
+    .tutorial-section p {
+        font-size: 14px;
+    }
+}
+
+/* Portrait orientation adjustments */
+@media (max-width: 768px) and (orientation: portrait) {
+    .utility-buttons {
+        grid-template-columns: repeat(4, 1fr);
+        top: 60px;
+        right: 10px;
+        left: 10px;
+    }
+
+    .utility-btn {
+        width: 100%;
+        height: 50px;
+    }
+
+    .action-buttons {
+        flex-direction: row;
+        bottom: 20px;
+        right: 180px;
+    }
+
+    .action-btn {
+        width: 60px;
+        height: 60px;
+    }
 }
