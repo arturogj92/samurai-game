@@ -1,0 +1,533 @@
+/* Custom pixel font */
+@font-face {
+    font-family: 'TinyFont';
+    src: url('assets/4 GUI/TinyFontCraftpixPixel.otf') format('opentype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'TinyFont', 'Courier New', monospace;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    color: #fff;
+    margin: 0;
+    padding: 0;
+}
+
+.game-container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.hud {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 15px;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    z-index: 10;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.stat {
+    color: #fff;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.stat span {
+    color: #ffd700;
+}
+
+.abilities {
+    display: flex;
+    gap: 10px;
+}
+
+.ability {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    transition: all 0.2s ease;
+}
+
+.ability.ready {
+    border-color: #0f0;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}
+
+.ability.cooldown {
+    opacity: 0.5;
+    border-color: #f00;
+}
+
+.ability-key {
+    font-size: 20px;
+    font-weight: bold;
+    color: #ffd700;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.ability-name {
+    font-size: 12px;
+    color: #fff;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.ability-cooldown {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: #0f0;
+    transition: width 0.1s linear;
+}
+
+#gameCanvas {
+    display: block;
+    background: #1a1a1a;
+    width: 100%;
+    height: 100%;
+}
+
+.game-over {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.95);
+    padding: 40px 60px;
+    border-radius: 15px;
+    text-align: center;
+    border: 3px solid #f00;
+    box-shadow: 0 0 30px rgba(255, 0, 0, 0.5);
+    z-index: 20;
+}
+
+.game-over h2 {
+    font-size: 48px;
+    color: #f00;
+    margin-bottom: 20px;
+    text-shadow: 3px 3px 6px rgba(255, 0, 0, 0.5);
+}
+
+.game-over p {
+    font-size: 24px;
+    margin-bottom: 30px;
+}
+
+.game-over button {
+    font-family: 'Courier New', monospace;
+    font-size: 20px;
+    padding: 15px 40px;
+    background: #f00;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s ease;
+}
+
+.game-over button:hover {
+    background: #ff3333;
+    transform: scale(1.1);
+    box-shadow: 0 0 20px rgba(255, 0, 0, 0.6);
+}
+
+.hidden {
+    display: none;
+}
+
+.controls {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.8);
+    padding: 8px 15px;
+    z-index: 5;
+    backdrop-filter: blur(5px);
+}
+
+.controls p {
+    margin: 3px 0;
+    font-size: 11px;
+    color: #aaa;
+    display: inline-block;
+    margin: 0 10px;
+}
+
+.controls p:first-child {
+    color: #ffd700;
+    font-weight: bold;
+    display: block;
+    margin-bottom: 3px;
+}
+
+/* XP Bar */
+.xp-bar-container {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 30px;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.xp-bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    background: linear-gradient(90deg, #00ff00, #00aa00);
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+.xp-text {
+    position: relative;
+    z-index: 11;
+    font-size: 14px;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+/* Wave Break */
+.wave-break {
+    position: absolute;
+    bottom: 50px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.9);
+    padding: 25px 40px;
+    border-radius: 15px;
+    text-align: center;
+    border: 3px solid #0f0;
+    box-shadow: 0 0 30px rgba(0, 255, 0, 0.5);
+    z-index: 20;
+}
+
+.wave-break h2 {
+    font-size: 32px;
+    color: #0f0;
+    margin-bottom: 10px;
+    text-shadow: 3px 3px 6px rgba(0, 255, 0, 0.5);
+}
+
+.wave-break .countdown {
+    font-size: 18px;
+    color: #fff;
+}
+
+.continue-wave-btn {
+    font-family: 'Courier New', monospace;
+    font-size: 18px;
+    padding: 12px 30px;
+    background: linear-gradient(135deg, #00ff00, #00aa00);
+    color: #000;
+    border: 2px solid #0f0;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-top: 15px;
+    transition: all 0.3s ease;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 0 15px rgba(0, 255, 0, 0.3);
+}
+
+.continue-wave-btn:hover {
+    background: linear-gradient(135deg, #00ff66, #00cc00);
+    transform: scale(1.05);
+    box-shadow: 0 0 25px rgba(0, 255, 0, 0.6);
+}
+
+.continue-wave-btn:active {
+    transform: scale(0.98);
+}
+
+/* Upgrade Menu */
+.upgrade-menu {
+    position: absolute;
+    bottom: 50px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.95);
+    padding: 20px;
+    border-radius: 15px;
+    text-align: center;
+    border: 3px solid #ffd700;
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
+    z-index: 20;
+    max-width: 750px;
+}
+
+.upgrade-menu h2 {
+    font-size: 32px;
+    color: #ffd700;
+    margin-bottom: 8px;
+    text-shadow: 3px 3px 6px rgba(255, 215, 0, 0.5);
+}
+
+.upgrade-subtitle {
+    font-size: 16px;
+    color: #aaa;
+    margin-bottom: 20px;
+}
+
+.upgrade-options {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.upgrade-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 10px;
+    padding: 15px;
+    width: 200px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.upgrade-card:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: #ffd700;
+    transform: translateY(-5px);
+    box-shadow: 0 5px 20px rgba(255, 215, 0, 0.3);
+}
+
+.upgrade-card h3 {
+    font-size: 18px;
+    color: #ffd700;
+    margin-bottom: 8px;
+}
+
+.upgrade-card p {
+    font-size: 13px;
+    color: #ccc;
+    line-height: 1.4;
+}
+
+.upgrade-card.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.upgrade-cost {
+    font-size: 14px;
+    color: #ffd700;
+    font-weight: bold;
+    margin-top: 8px;
+}
+
+.shop-close-btn {
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    padding: 10px 20px;
+    background: #f00;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-top: 10px;
+    transition: all 0.3s ease;
+}
+
+.shop-close-btn:hover {
+    background: #ff3333;
+    transform: scale(1.05);
+}
+
+.shop-header {
+    width: 100%;
+    margin-bottom: 15px;
+}
+
+.purchases-remaining {
+    font-size: 16px;
+    color: #00ff00;
+    font-weight: bold;
+    text-shadow: 2px 2px 4px rgba(0, 255, 0, 0.5);
+}
+
+.bamboo-tool {
+    border-color: #32CD32;
+    background: rgba(50, 205, 50, 0.1);
+}
+
+.bamboo-tool .ability-key {
+    color: #32CD32;
+}
+
+/* Idle Panel */
+.idle-panel {
+    position: absolute;
+    bottom: 120px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.95);
+    padding: 25px;
+    border-radius: 15px;
+    border: 3px solid #00bcd4;
+    box-shadow: 0 0 30px rgba(0, 188, 212, 0.5);
+    z-index: 20;
+    min-width: 350px;
+}
+
+.idle-panel h3 {
+    font-size: 24px;
+    color: #00bcd4;
+    margin-bottom: 15px;
+    text-align: center;
+    text-shadow: 2px 2px 4px rgba(0, 188, 212, 0.5);
+}
+
+.resources-display {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.resource-item {
+    font-size: 16px;
+    color: #fff;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.mode-indicator {
+    grid-column: 1 / -1;
+    font-size: 18px;
+    color: #ffd700;
+    font-weight: bold;
+    text-align: center;
+    padding: 10px;
+    background: rgba(255, 215, 0, 0.2);
+    border-radius: 5px;
+    border: 2px solid #ffd700;
+    animation: glow 1.5s ease-in-out infinite;
+}
+
+@keyframes glow {
+    0%, 100% {
+        box-shadow: 0 0 5px rgba(255, 215, 0, 0.5);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+    }
+}
+
+.activities-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.activity-btn {
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    padding: 12px 20px;
+    background: linear-gradient(135deg, #00bcd4, #0097a7);
+    color: #fff;
+    border: 2px solid #00bcd4;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.activity-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #00e5ff, #00bcd4);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 20px rgba(0, 188, 212, 0.4);
+}
+
+.activity-btn.active {
+    background: linear-gradient(135deg, #ffd700, #ffa500);
+    border-color: #ffd700;
+    animation: pulse 1s infinite;
+}
+
+.activity-btn.disabled,
+.activity-btn:disabled {
+    background: rgba(100, 100, 100, 0.5);
+    border-color: #555;
+    color: #888;
+    cursor: not-allowed;
+    transform: none;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+    }
+}
+
+.activity-progress {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 12px;
+    border-radius: 8px;
+}
+
+.progress-label {
+    font-size: 14px;
+    color: #fff;
+    margin-bottom: 8px;
+    text-align: center;
+    font-weight: bold;
+}
+
+.progress-bar-bg {
+    width: 100%;
+    height: 20px;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #00ff00, #00aa00);
+    border-radius: 8px;
+    transition: width 0.1s linear;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+}

@@ -1,0 +1,2448 @@
+// Game Configuration
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// World dimensions (much larger than canvas)
+const WORLD = {
+    width: 3200,
+    height: 2400
+};
+
+// Decorative Floor Tiles System
+class FloorTile {
+    constructor(x, y, type) {
+        this.x = x;
+        this.y = y;
+        this.type = type;
+        this.size = type === 'campfire' ? 25 : type === 'rock' ? 15 : 20;
+        this.variant = Math.floor(Math.random() * 3); // Random variant for variety
+    }
+
+    draw() {
+        switch(this.type) {
+            case 'campfire':
+                this.drawCampfire();
+                break;
+            case 'rock':
+                this.drawRock();
+                break;
+            case 'bush':
+                this.drawBush();
+                break;
+            case 'grass':
+                this.drawGrass();
+                break;
+            case 'crack':
+                this.drawCrack();
+                break;
+            case 'stone':
+                this.drawStone();
+                break;
+            case 'chest':
+                this.drawChest();
+                break;
+        }
+    }
+
+    drawCampfire() {
+        // Fire base (stones in circle)
+        ctx.fillStyle = '#4A4A4A';
+        for (let i = 0; i < 8; i++) {
+            const angle = (Math.PI * 2 * i) / 8;
+            const x = this.x + Math.cos(angle) * 12;
+            const y = this.y + Math.sin(angle) * 12;
+            ctx.beginPath();
+            ctx.arc(x, y, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Wood logs
+        ctx.fillStyle = '#5C4033';
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(Math.PI / 4);
+        ctx.fillRect(-10, -2, 20, 4);
+        ctx.rotate(Math.PI / 2);
+        ctx.fillRect(-10, -2, 20, 4);
+        ctx.restore();
+
+        // Fire (animated with time)
+        const flicker = Math.sin(performance.now() * 0.005 + this.x) * 0.2 + 0.8;
+
+        // Red flame
+        ctx.fillStyle = `rgba(255, 69, 0, ${0.8 * flicker})`;
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y - 15);
+        ctx.lineTo(this.x - 6, this.y);
+        ctx.lineTo(this.x + 6, this.y);
+        ctx.closePath();
+        ctx.fill();
+
+        // Yellow flame
+        ctx.fillStyle = `rgba(255, 215, 0, ${0.7 * flicker})`;
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y - 10);
+        ctx.lineTo(this.x - 4, this.y);
+        ctx.lineTo(this.x + 4, this.y);
+        ctx.closePath();
+        ctx.fill();
+
+        // Glow effect
+        ctx.shadowColor = 'rgba(255, 150, 0, 0.5)';
+        ctx.shadowBlur = 15 * flicker;
+        ctx.fillStyle = `rgba(255, 200, 0, ${0.3 * flicker})`;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y - 5, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+
+    drawRock() {
+        // Gray rock with shading
+        ctx.fillStyle = '#696969';
+        ctx.beginPath();
+
+        // Irregular rock shape
+        const points = 6;
+        for (let i = 0; i < points; i++) {
+            const angle = (Math.PI * 2 * i) / points;
+            const radius = this.size * (0.8 + Math.random() * 0.4);
+            const x = this.x + Math.cos(angle) * radius;
+            const y = this.y + Math.sin(angle) * radius * 0.7;
+            if (i === 0) {
+                ctx.moveTo(x, y);
+            } else {
+                ctx.lineTo(x, y);
+            }
+        }
+        ctx.closePath();
+        ctx.fill();
+
+        // Highlight
+        ctx.fillStyle = '#909090';
+        ctx.beginPath();
+        ctx.arc(this.x - 3, this.y - 3, this.size * 0.3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.beginPath();
+        ctx.arc(this.x + 2, this.y + 2, this.size * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    drawBush() {
+        // Dark green bush
+        ctx.fillStyle = '#2F4F2F';
+
+        // Multiple overlapping circles for bushy appearance
+        for (let i = 0; i < 5; i++) {
+            const angle = (Math.PI * 2 * i) / 5;
+            const x = this.x + Math.cos(angle) * 8;
+            const y = this.y + Math.sin(angle) * 8;
+            ctx.beginPath();
+            ctx.arc(x, y, this.size * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Center circle
+        ctx.fillStyle = '#3A5F3A';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Lighter green highlights
+        ctx.fillStyle = '#4A7F4A';
+        ctx.beginPath();
+        ctx.arc(this.x - 3, this.y - 3, this.size * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    drawGrass() {
+        // Small grass patches
+        ctx.strokeStyle = '#3A5F3A';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+
+        for (let i = 0; i < 6; i++) {
+            const angle = (Math.PI * 2 * i) / 6 + this.variant;
+            const x = this.x + Math.cos(angle) * 8;
+            const y = this.y + Math.sin(angle) * 8;
+
+            ctx.beginPath();
+            ctx.moveTo(x, y + 5);
+            ctx.lineTo(x + (Math.random() - 0.5) * 4, y - 5);
+            ctx.stroke();
+        }
+    }
+
+    drawCrack() {
+        // Floor crack/crevice
+        ctx.strokeStyle = '#1a1a1a';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+
+        ctx.beginPath();
+        ctx.moveTo(this.x - 15, this.y);
+        ctx.lineTo(this.x - 5, this.y + 5);
+        ctx.lineTo(this.x + 5, this.y - 3);
+        ctx.lineTo(this.x + 15, this.y + 2);
+        ctx.stroke();
+
+        // Smaller branch cracks
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(this.x - 5, this.y + 5);
+        ctx.lineTo(this.x - 8, this.y + 10);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(this.x + 5, this.y - 3);
+        ctx.lineTo(this.x + 7, this.y - 8);
+        ctx.stroke();
+    }
+
+    drawStone() {
+        // Flat stone tile
+        ctx.fillStyle = '#5A5A5A';
+        ctx.beginPath();
+        ctx.moveTo(this.x - 12, this.y - 8);
+        ctx.lineTo(this.x + 12, this.y - 8);
+        ctx.lineTo(this.x + 15, this.y + 8);
+        ctx.lineTo(this.x - 15, this.y + 8);
+        ctx.closePath();
+        ctx.fill();
+
+        // Stone texture lines
+        ctx.strokeStyle = '#4A4A4A';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(this.x - 10, this.y - 3);
+        ctx.lineTo(this.x + 10, this.y - 3);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(this.x - 12, this.y + 3);
+        ctx.lineTo(this.x + 12, this.y + 3);
+        ctx.stroke();
+    }
+
+    drawChest() {
+        // Wooden chest
+        const chestWidth = 24;
+        const chestHeight = 18;
+
+        // Chest body (brown)
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(this.x - chestWidth/2, this.y - chestHeight/2, chestWidth, chestHeight);
+
+        // Chest lid (darker brown)
+        ctx.fillStyle = '#654321';
+        ctx.fillRect(this.x - chestWidth/2, this.y - chestHeight/2, chestWidth, 6);
+
+        // Metal bands
+        ctx.strokeStyle = '#888888';
+        ctx.lineWidth = 2;
+
+        // Vertical bands
+        ctx.beginPath();
+        ctx.moveTo(this.x - chestWidth/2 + 6, this.y - chestHeight/2);
+        ctx.lineTo(this.x - chestWidth/2 + 6, this.y + chestHeight/2);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(this.x + chestWidth/2 - 6, this.y - chestHeight/2);
+        ctx.lineTo(this.x + chestWidth/2 - 6, this.y + chestHeight/2);
+        ctx.stroke();
+
+        // Horizontal band
+        ctx.beginPath();
+        ctx.moveTo(this.x - chestWidth/2, this.y);
+        ctx.lineTo(this.x + chestWidth/2, this.y);
+        ctx.stroke();
+
+        // Lock
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y + 2, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.fillRect(this.x - chestWidth/2 + 2, this.y + chestHeight/2, chestWidth - 4, 3);
+    }
+}
+
+// Generate decorative tiles for the world
+function generateFloorTiles() {
+    const tiles = [];
+
+    // Manual placement - ONLY these specific tiles, nothing else!
+    const manualTiles = [
+        // 2 campfires (rare)
+        { x: 1200, y: 800, type: 'campfire' },
+        { x: 2000, y: 1600, type: 'campfire' },
+
+        // 2 chests (rare)
+        { x: 800, y: 1200, type: 'chest' },
+        { x: 2400, y: 600, type: 'chest' },
+
+        // A few common decorations (5 total)
+        { x: 500, y: 500, type: 'rock' },
+        { x: 1600, y: 1000, type: 'bush' },
+        { x: 2800, y: 1800, type: 'grass' },
+        { x: 1000, y: 2000, type: 'rock' },
+        { x: 2200, y: 400, type: 'grass' }
+    ];
+
+    // Add all manual tiles
+    for (let tile of manualTiles) {
+        tiles.push(new FloorTile(tile.x, tile.y, tile.type));
+    }
+
+    return tiles;
+}
+
+// Initialize floor tiles
+const floorTiles = generateFloorTiles();
+
+// Sprite Animation System
+class SpriteAnimator {
+    constructor(spritePath, frameWidth, frameHeight, frameCount, fps = 10, loop = true) {
+        this.image = new Image();
+        this.image.src = spritePath;
+        this.frameWidth = frameWidth;
+        this.frameHeight = frameHeight;
+        this.frameCount = frameCount;
+        this.fps = fps;
+        this.currentFrame = 0;
+        this.frameTimer = 0;
+        this.frameDelay = 1000 / fps; // ms per frame
+        this.loaded = false;
+        this.loop = loop; // Whether animation loops or stops at last frame
+        this.finished = false; // True when non-looping animation reaches end
+
+        this.image.onload = () => {
+            this.loaded = true;
+        };
+    }
+
+    update(deltaTime) {
+        if (!this.loaded) return;
+        if (this.finished) return; // Don't update if animation is finished
+
+        this.frameTimer += deltaTime;
+
+        if (this.frameTimer >= this.frameDelay) {
+            if (this.loop) {
+                // Loop animation
+                this.currentFrame = (this.currentFrame + 1) % this.frameCount;
+            } else {
+                // Play once and stop at last frame
+                this.currentFrame++;
+                if (this.currentFrame >= this.frameCount) {
+                    this.currentFrame = this.frameCount - 1; // Stay on last frame
+                    this.finished = true;
+                }
+            }
+            this.frameTimer = 0;
+        }
+    }
+
+    draw(ctx, x, y, scale = 1, flipH = false) {
+        if (!this.loaded) return;
+
+        const drawWidth = this.frameWidth * scale;
+        const drawHeight = this.frameHeight * scale;
+
+        // Calculate destination position (centered on x, y)
+        let destX = x - drawWidth / 2;
+        let destY = y - drawHeight / 2;
+
+        if (flipH) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(-1, 1);
+
+            ctx.drawImage(
+                this.image,
+                this.currentFrame * this.frameWidth, // source x
+                0, // source y
+                this.frameWidth, // source width
+                this.frameHeight, // source height
+                -drawWidth / 2, // dest x (centered)
+                -drawHeight / 2, // dest y (centered)
+                drawWidth, // dest width
+                drawHeight // dest height
+            );
+
+            ctx.restore();
+        } else {
+            // No flip - direct draw without save/restore
+            ctx.drawImage(
+                this.image,
+                this.currentFrame * this.frameWidth, // source x
+                0, // source y
+                this.frameWidth, // source width
+                this.frameHeight, // source height
+                destX, // dest x (centered)
+                destY, // dest y (centered)
+                drawWidth, // dest width
+                drawHeight // dest height
+            );
+        }
+    }
+
+    reset() {
+        this.currentFrame = 0;
+        this.frameTimer = 0;
+        this.finished = false;
+    }
+}
+
+// Sprite collections
+const SPRITES = {
+    kunoichi: {
+        idle: null,
+        walk: null,
+        run: null,
+        attack1: null,
+        attack2: null,
+        hurt: null,
+        dead: null
+    },
+    ninjaMonk: {
+        idle: null,
+        walk: null,
+        run: null,
+        attack1: null,
+        attack2: null,
+        hurt: null,
+        dead: null
+    },
+    ninjaPeasant: {
+        idle: null,
+        walk: null,
+        run: null,
+        attack1: null,
+        attack2: null,
+        shot: null,
+        hurt: null,
+        dead: null
+    },
+    samuraiArcher: {
+        idle: null,
+        walk: null,
+        run: null,
+        attack1: null,
+        attack2: null,
+        attack3: null,
+        shot: null,
+        hurt: null,
+        dead: null,
+        jump: null
+    }
+};
+
+// Arrow sprite (loaded separately)
+let arrowSprite = null;
+
+// Initialize sprites
+function initSprites() {
+    // Kunoichi sprites (enemies)
+    SPRITES.kunoichi.idle = new SpriteAnimator('assets/Kunoichi/Idle.png', 128, 128, 9, 8);
+    SPRITES.kunoichi.walk = new SpriteAnimator('assets/Kunoichi/Walk.png', 128, 128, 8, 12);
+    SPRITES.kunoichi.run = new SpriteAnimator('assets/Kunoichi/Run.png', 128, 128, 8, 15);
+    SPRITES.kunoichi.attack1 = new SpriteAnimator('assets/Kunoichi/Attack_1.png', 128, 128, 6, 12);
+    SPRITES.kunoichi.attack2 = new SpriteAnimator('assets/Kunoichi/Attack_2.png', 128, 128, 6, 12);
+    SPRITES.kunoichi.hurt = new SpriteAnimator('assets/Kunoichi/Hurt.png', 128, 128, 3, 8);
+    SPRITES.kunoichi.dead = new SpriteAnimator('assets/Kunoichi/Dead.png', 128, 128, 10, 8);
+
+    // Ninja Monk sprites
+    SPRITES.ninjaMonk.idle = new SpriteAnimator('assets/Ninja_Monk/Idle.png', 128, 128, 7, 8);
+    SPRITES.ninjaMonk.walk = new SpriteAnimator('assets/Ninja_Monk/Walk.png', 128, 128, 8, 12);
+    SPRITES.ninjaMonk.run = new SpriteAnimator('assets/Ninja_Monk/Run.png', 128, 128, 8, 15);
+    SPRITES.ninjaMonk.attack1 = new SpriteAnimator('assets/Ninja_Monk/Attack_1.png', 128, 128, 4, 10);
+    SPRITES.ninjaMonk.attack2 = new SpriteAnimator('assets/Ninja_Monk/Attack_2.png', 128, 128, 4, 10);
+    SPRITES.ninjaMonk.hurt = new SpriteAnimator('assets/Ninja_Monk/Hurt.png', 128, 128, 3, 8);
+    SPRITES.ninjaMonk.dead = new SpriteAnimator('assets/Ninja_Monk/Dead.png', 128, 128, 7, 8);
+
+    // Ninja Peasant sprites
+    SPRITES.ninjaPeasant.idle = new SpriteAnimator('assets/Ninja_Peasant/Idle.png', 128, 128, 9, 8);
+    SPRITES.ninjaPeasant.walk = new SpriteAnimator('assets/Ninja_Peasant/Walk.png', 128, 128, 8, 12);
+    SPRITES.ninjaPeasant.run = new SpriteAnimator('assets/Ninja_Peasant/Run.png', 128, 128, 8, 15);
+    SPRITES.ninjaPeasant.attack1 = new SpriteAnimator('assets/Ninja_Peasant/Attack_1.png', 128, 128, 6, 12);
+    SPRITES.ninjaPeasant.attack2 = new SpriteAnimator('assets/Ninja_Peasant/Attack_2.png', 128, 128, 6, 12);
+    SPRITES.ninjaPeasant.shot = new SpriteAnimator('assets/Ninja_Peasant/Shot.png', 128, 128, 4, 15);
+    SPRITES.ninjaPeasant.hurt = new SpriteAnimator('assets/Ninja_Peasant/Hurt.png', 128, 128, 3, 8);
+    SPRITES.ninjaPeasant.dead = new SpriteAnimator('assets/Ninja_Peasant/Dead.png', 128, 128, 10, 8);
+
+    // Samurai Archer sprites (player)
+    SPRITES.samuraiArcher.idle = new SpriteAnimator('assets/Samurai_Archer/Idle.png', 128, 128, 10, 8);
+    SPRITES.samuraiArcher.walk = new SpriteAnimator('assets/Samurai_Archer/Walk.png', 128, 128, 8, 12);
+    SPRITES.samuraiArcher.run = new SpriteAnimator('assets/Samurai_Archer/Run.png', 128, 128, 8, 15);
+    SPRITES.samuraiArcher.attack1 = new SpriteAnimator('assets/Samurai_Archer/Attack_1.png', 128, 128, 4, 12);
+    SPRITES.samuraiArcher.attack2 = new SpriteAnimator('assets/Samurai_Archer/Attack_2.png', 128, 128, 4, 12);
+    SPRITES.samuraiArcher.attack3 = new SpriteAnimator('assets/Samurai_Archer/Attack_3.png', 128, 128, 4, 12);
+    SPRITES.samuraiArcher.shot = new SpriteAnimator('assets/Samurai_Archer/Shot.png', 128, 128, 14, 15);
+    SPRITES.samuraiArcher.hurt = new SpriteAnimator('assets/Samurai_Archer/Hurt.png', 128, 128, 3, 8);
+    SPRITES.samuraiArcher.dead = new SpriteAnimator('assets/Samurai_Archer/Dead.png', 128, 128, 7, 8);
+    SPRITES.samuraiArcher.jump = new SpriteAnimator('assets/Samurai_Archer/Jump.png', 128, 128, 10, 12);
+
+    // Load arrow sprite
+    arrowSprite = new Image();
+    arrowSprite.src = 'assets/Samurai_Archer/Arrow.png';
+}
+
+// Initialize sprites when page loads
+initSprites();
+
+// Camera system
+const camera = {
+    x: 0,
+    y: 0,
+    width: canvas.width,
+    height: canvas.height,
+
+    follow(target) {
+        // Center camera on target
+        this.x = target.x - this.width / 2;
+        this.y = target.y - this.height / 2;
+
+        // Keep camera within world bounds
+        this.x = Math.max(0, Math.min(this.x, WORLD.width - this.width));
+        this.y = Math.max(0, Math.min(this.y, WORLD.height - this.height));
+    }
+};
+
+const GAME_STATE = {
+    playing: true,
+    score: 0,
+    wave: 1,
+    enemiesKilled: 0,
+    isWaveBreak: false,
+    waveBreakEndTime: 0,
+
+    // Wave system
+    enemiesThisWave: 0,      // Enemigos que quedan por matar en esta wave
+    totalEnemiesThisWave: 10, // Total de enemigos para esta wave
+
+    // Recursos persistentes
+    resources: {
+        bambooSeeds: 5,  // Semillas de bambú - Start with 5
+        wood: 0,         // Madera
+        gold: 50         // Oro - Start with 50
+    },
+
+    // Modos de herramienta
+    axeMode: false,
+    axeModeStartTime: 0,
+
+    // Shop
+    shopOpen: false,
+    purchasesThisWave: 0
+};
+
+// Vendedor NPC Class
+class Vendor {
+    constructor() {
+        // Spawn en una posición fija del mundo
+        this.x = WORLD.width / 2 + 300;
+        this.y = WORLD.height / 2;
+        this.size = 20;
+        this.interactionRadius = 80;
+    }
+
+    draw() {
+        // Cuerpo del vendedor
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(this.x - 10, this.y - 30, 20, 30);
+
+        // Cabeza
+        ctx.fillStyle = '#FFD700';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y - 35, 10, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Puesto/mesa
+        ctx.fillStyle = '#654321';
+        ctx.fillRect(this.x - 25, this.y, 50, 10);
+        ctx.fillRect(this.x - 30, this.y - 40, 5, 40); // Poste izq
+        ctx.fillRect(this.x + 25, this.y - 40, 5, 40); // Poste der
+
+        // Toldo
+        ctx.fillStyle = '#FF6347';
+        ctx.beginPath();
+        ctx.moveTo(this.x - 35, this.y - 40);
+        ctx.lineTo(this.x + 35, this.y - 40);
+        ctx.lineTo(this.x + 30, this.y - 50);
+        ctx.lineTo(this.x - 30, this.y - 50);
+        ctx.closePath();
+        ctx.fill();
+
+        // Texto
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('🪙 VENDEDOR', this.x, this.y - 55);
+
+        // Indicator si el jugador está cerca
+        const dist = distance(ninja.x, ninja.y, this.x, this.y);
+        if (dist < this.interactionRadius) {
+            ctx.fillStyle = '#00FF00';
+            ctx.font = 'bold 14px Arial';
+            ctx.fillText('Presiona V para vender madera', this.x, this.y + 25);
+        }
+    }
+
+    isPlayerNear() {
+        return distance(ninja.x, ninja.y, this.x, this.y) < this.interactionRadius;
+    }
+}
+
+const vendor = new Vendor();
+
+// Abilities system
+const ABILITIES = {
+    dash: {
+        key: 'q',
+        cooldown: 3000, // 3 seconds
+        lastUsed: 0,
+        duration: 200, // Dash animation duration
+        distance: 150, // Dash distance
+
+        use(timestamp) {
+            if (timestamp - this.lastUsed < this.cooldown) return false;
+            if (ninja.isDashing) return false; // Don't dash while already dashing
+
+            // Calculate dash direction based on movement keys
+            let dx = 0, dy = 0;
+            if (ninja.keys['ArrowUp'] || ninja.keys['w']) dy = -1;
+            if (ninja.keys['ArrowDown'] || ninja.keys['s']) dy = 1;
+            if (ninja.keys['ArrowLeft'] || ninja.keys['a']) dx = -1;
+            if (ninja.keys['ArrowRight'] || ninja.keys['d']) dx = 1;
+
+            // Default to right if no direction
+            if (dx === 0 && dy === 0) dx = 1;
+
+            // Normalize and calculate target position
+            const magnitude = Math.sqrt(dx * dx + dy * dy);
+            let targetX = ninja.x + (dx / magnitude) * this.distance;
+            let targetY = ninja.y + (dy / magnitude) * this.distance;
+
+            // Clamp target to world bounds
+            targetX = Math.max(ninja.size, Math.min(WORLD.width - ninja.size, targetX));
+            targetY = Math.max(ninja.size, Math.min(WORLD.height - ninja.size, targetY));
+
+            // Start smooth dash animation
+            ninja.startDash(targetX, targetY, timestamp);
+
+            this.lastUsed = timestamp;
+
+            return true;
+        }
+    },
+
+    burst: {
+        key: 'e',
+        cooldown: 5000, // 5 seconds
+        lastUsed: 0,
+        projectiles: 12, // Number of shurikens to fire
+
+        use(timestamp) {
+            if (timestamp - this.lastUsed < this.cooldown) return false;
+
+            // Fire shurikens in all directions (but respect max limit)
+            for (let i = 0; i < this.projectiles; i++) {
+                if (shurikens.length >= MAX_SHURIKENS) break; // Stop if we hit the limit
+                const angle = (Math.PI * 2 * i) / this.projectiles;
+                const targetX = ninja.x + Math.cos(angle) * 1000;
+                const targetY = ninja.y + Math.sin(angle) * 1000;
+                shurikens.push(new Shuriken(ninja.x, ninja.y, targetX, targetY));
+            }
+
+            this.lastUsed = timestamp;
+
+            // Visual effect
+            createBurstEffect(ninja.x, ninja.y);
+
+            return true;
+        }
+    },
+
+    shield: {
+        key: 'r',
+        cooldown: 10000, // 10 seconds
+        lastUsed: 0,
+        duration: 3000, // 3 seconds of invincibility
+        active: false,
+        endTime: 0,
+
+        use(timestamp) {
+            if (timestamp - this.lastUsed < this.cooldown) return false;
+
+            this.active = true;
+            this.endTime = timestamp + this.duration;
+            this.lastUsed = timestamp;
+            ninja.shielded = true;
+
+            return true;
+        },
+
+        update(timestamp) {
+            if (this.active && timestamp > this.endTime) {
+                this.active = false;
+                ninja.shielded = false;
+            }
+        }
+    }
+};
+
+// Upgrade system - Now purchased with gold
+const UPGRADES = {
+    dashCooldown: {
+        name: "Fast Dash",
+        description: "Reduce Dash cooldown by 20%",
+        cost: 100,
+        purchased: false,
+        apply() {
+            ABILITIES.dash.cooldown *= 0.8;
+            this.purchased = true;
+        }
+    },
+    dashDistance: {
+        name: "Long Dash",
+        description: "Increase Dash distance by 30%",
+        cost: 100,
+        purchased: false,
+        apply() {
+            ABILITIES.dash.distance *= 1.3;
+            this.purchased = true;
+        }
+    },
+    burstCooldown: {
+        name: "Rapid Burst",
+        description: "Reduce Burst cooldown by 20%",
+        cost: 150,
+        purchased: false,
+        apply() {
+            ABILITIES.burst.cooldown *= 0.8;
+            this.purchased = true;
+        }
+    },
+    burstProjectiles: {
+        name: "More Shurikens",
+        description: "Burst fires 4 more shurikens",
+        cost: 150,
+        purchased: false,
+        apply() {
+            ABILITIES.burst.projectiles += 4;
+            this.purchased = true;
+        }
+    },
+    shieldCooldown: {
+        name: "Quick Shield",
+        description: "Reduce Shield cooldown by 20%",
+        cost: 200,
+        purchased: false,
+        apply() {
+            ABILITIES.shield.cooldown *= 0.8;
+            this.purchased = true;
+        }
+    },
+    shieldDuration: {
+        name: "Long Shield",
+        description: "Increase Shield duration by 1 second",
+        cost: 200,
+        purchased: false,
+        apply() {
+            ABILITIES.shield.duration += 1000;
+            this.purchased = true;
+        }
+    },
+    moveSpeed: {
+        name: "Swift Ninja",
+        description: "Increase movement speed by 20%",
+        cost: 120,
+        purchased: false,
+        apply() {
+            ninja.speed *= 1.2;
+            this.purchased = true;
+        }
+    },
+    fireRate: {
+        name: "Quick Shot",
+        description: "Reduce attack cooldown by 15%",
+        cost: 120,
+        purchased: false,
+        apply() {
+            shurikenCooldown *= 0.85;
+            this.purchased = true;
+        }
+    },
+    bambooSeeds: {
+        name: "Bamboo Seeds Pack",
+        description: "Get 5 bamboo seeds",
+        cost: 30,
+        purchased: false,
+        repeatable: true, // Can buy multiple times
+        apply() {
+            GAME_STATE.resources.bambooSeeds += 5;
+            if (!this.repeatable) {
+                this.purchased = true;
+            }
+        }
+    }
+};
+
+function showShop() {
+    // Solo se puede abrir durante wave break
+    if (!GAME_STATE.isWaveBreak) {
+        return;
+    }
+
+    // Check if already purchased 2 items
+    if (GAME_STATE.purchasesThisWave >= 2) {
+        return;
+    }
+
+    GAME_STATE.shopOpen = true;
+    GAME_STATE.playing = false;
+
+    const menu = document.getElementById('upgradeMenu');
+    const options = document.getElementById('upgradeOptions');
+    options.innerHTML = '';
+
+    // Show purchases remaining
+    const purchasesRemaining = 2 - GAME_STATE.purchasesThisWave;
+    const header = document.createElement('div');
+    header.className = 'shop-header';
+    header.innerHTML = `<p class="purchases-remaining">Compras restantes: ${purchasesRemaining}/2</p>`;
+    options.appendChild(header);
+
+    // Show all upgrades
+    Object.keys(UPGRADES).forEach(key => {
+        const upgrade = UPGRADES[key];
+
+        // Skip if already purchased and not repeatable
+        if (upgrade.purchased && !upgrade.repeatable) return;
+
+        const canAfford = GAME_STATE.resources.gold >= upgrade.cost;
+
+        const card = document.createElement('div');
+        card.className = `upgrade-card ${!canAfford ? 'disabled' : ''}`;
+        card.innerHTML = `
+            <h3>${upgrade.name}</h3>
+            <p>${upgrade.description}</p>
+            <p class="upgrade-cost">💰 ${upgrade.cost} Gold</p>
+        `;
+
+        if (canAfford) {
+            card.onclick = () => buyUpgrade(key);
+        }
+
+        options.appendChild(card);
+    });
+
+    // Add close button
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'shop-close-btn';
+    closeBtn.textContent = 'Close Shop (T)';
+    closeBtn.onclick = closeShop;
+    options.appendChild(closeBtn);
+
+    menu.classList.remove('hidden');
+}
+
+function buyUpgrade(key) {
+    const upgrade = UPGRADES[key];
+
+    if (GAME_STATE.resources.gold >= upgrade.cost && GAME_STATE.purchasesThisWave < 2) {
+        GAME_STATE.resources.gold -= upgrade.cost;
+        upgrade.apply();
+        GAME_STATE.purchasesThisWave++;
+
+        // Check if reached limit
+        if (GAME_STATE.purchasesThisWave >= 2) {
+            // Close shop automatically
+            closeShop();
+        } else {
+            // Refresh shop to update available upgrades
+            showShop();
+        }
+    }
+}
+
+function closeShop() {
+    document.getElementById('upgradeMenu').classList.add('hidden');
+    GAME_STATE.shopOpen = false;
+    GAME_STATE.playing = true;
+}
+
+// Visual effects
+const effects = [];
+
+class Effect {
+    constructor(x, y, type) {
+        this.x = x;
+        this.y = y;
+        this.type = type;
+        this.lifetime = 0;
+        this.maxLifetime = type === 'dash' ? 300 : type === 'burst' ? 500 : 3000;
+    }
+
+    update(deltaTime) {
+        this.lifetime += deltaTime;
+        return this.lifetime < this.maxLifetime;
+    }
+
+    draw() {
+        const alpha = 1 - (this.lifetime / this.maxLifetime);
+
+        if (this.type === 'dash') {
+            ctx.strokeStyle = `rgba(0, 255, 255, ${alpha})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, 20 + this.lifetime / 10, 0, Math.PI * 2);
+            ctx.stroke();
+        } else if (this.type === 'burst') {
+            ctx.strokeStyle = `rgba(255, 255, 0, ${alpha})`;
+            ctx.lineWidth = 2;
+            for (let i = 0; i < 12; i++) {
+                const angle = (Math.PI * 2 * i) / 12;
+                const radius = this.lifetime / 3;
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y);
+                ctx.lineTo(this.x + Math.cos(angle) * radius, this.y + Math.sin(angle) * radius);
+                ctx.stroke();
+            }
+        }
+    }
+}
+
+function createDashEffect(x, y) {
+    effects.push(new Effect(x, y, 'dash'));
+}
+
+function createBurstEffect(x, y) {
+    effects.push(new Effect(x, y, 'burst'));
+}
+
+// Player (Ninja) Class
+class Ninja {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.size = 35; // Hitbox size (smaller than sprite)
+        this.spriteScale = 0.8; // Scale down the 128x128 sprites (increased from 0.6)
+        this.speed = 3; // Reduced from 5 to 3
+        this.keys = {};
+        this.shielded = false;
+
+        // Health system
+        this.maxHealth = 100;
+        this.health = this.maxHealth;
+        this.isInvulnerable = false;
+        this.invulnerabilityEndTime = 0;
+        this.invulnerabilityDuration = 1500; // 1.5 seconds of iframes
+
+        // Player gets its OWN sprite instances to prevent any sharing issues
+        this.sprites = {
+            idle: new SpriteAnimator('assets/Samurai_Archer/Idle.png', 128, 128, 10, 8),
+            walk: new SpriteAnimator('assets/Samurai_Archer/Walk.png', 128, 128, 8, 12),
+            run: new SpriteAnimator('assets/Samurai_Archer/Run.png', 128, 128, 8, 15),
+            shot: new SpriteAnimator('assets/Samurai_Archer/Shot.png', 128, 128, 14, 15),
+            protect: new SpriteAnimator('assets/Samurai_Commander/Protect.png', 128, 128, 2, 8),
+            hurt: new SpriteAnimator('assets/Samurai_Archer/Hurt.png', 128, 128, 3, 8, false), // Non-looping hurt animation
+        };
+
+        // Sprite animation state
+        this.animationState = 'idle';
+        this.previousAnimationState = 'idle';
+        this.facingRight = true;
+        this.lastMoveX = 0;
+        this.lastMoveY = 0;
+
+        // Attack animation state
+        this.isAttacking = false;
+        this.attackEndTime = 0;
+
+        // Hurt animation state
+        this.isHurt = false;
+        this.hurtEndTime = 0;
+
+        // Dash state
+        this.isDashing = false;
+        this.dashStartX = 0;
+        this.dashStartY = 0;
+        this.dashTargetX = 0;
+        this.dashTargetY = 0;
+        this.dashStartTime = 0;
+        this.dashDuration = 200; // ms
+        this.dashTrail = []; // Trail positions
+    }
+
+    update(timestamp, deltaTime) {
+        // Update invulnerability
+        if (this.isInvulnerable && timestamp > this.invulnerabilityEndTime) {
+            this.isInvulnerable = false;
+        }
+
+        // Determine movement
+        let isMoving = false;
+        let moveX = 0, moveY = 0;
+
+        // Check if attack animation is finished
+        if (this.isAttacking && timestamp > this.attackEndTime) {
+            this.isAttacking = false;
+        }
+
+        // Check if hurt animation is finished
+        if (this.isHurt && timestamp > this.hurtEndTime) {
+            this.isHurt = false;
+        }
+
+        // Handle dash animation
+        if (this.isDashing) {
+            const elapsed = timestamp - this.dashStartTime;
+            const progress = Math.min(elapsed / this.dashDuration, 1);
+
+            // Ease-out cubic interpolation for smooth deceleration
+            const easeProgress = 1 - Math.pow(1 - progress, 3);
+
+            // Interpolate position
+            this.x = this.dashStartX + (this.dashTargetX - this.dashStartX) * easeProgress;
+            this.y = this.dashStartY + (this.dashTargetY - this.dashStartY) * easeProgress;
+
+            // Add to trail
+            if (this.dashTrail.length === 0 ||
+                (this.x !== this.dashTrail[this.dashTrail.length - 1].x ||
+                 this.y !== this.dashTrail[this.dashTrail.length - 1].y)) {
+                this.dashTrail.push({ x: this.x, y: this.y, alpha: 1 });
+            }
+
+            // End dash when complete
+            if (progress >= 1) {
+                this.isDashing = false;
+                this.x = this.dashTargetX;
+                this.y = this.dashTargetY;
+            }
+
+            this.animationState = 'run';
+            isMoving = true;
+        } else {
+            // Normal movement with world bounds checking (CAN MOVE WHILE ATTACKING!)
+            if (this.keys['ArrowUp'] || this.keys['w']) {
+                this.y = Math.max(this.size, this.y - this.speed);
+                moveY = -1;
+                isMoving = true;
+            }
+            if (this.keys['ArrowDown'] || this.keys['s']) {
+                this.y = Math.min(WORLD.height - this.size, this.y + this.speed);
+                moveY = 1;
+                isMoving = true;
+            }
+            if (this.keys['ArrowLeft'] || this.keys['a']) {
+                this.x = Math.max(this.size, this.x - this.speed);
+                moveX = -1;
+                isMoving = true;
+            }
+            if (this.keys['ArrowRight'] || this.keys['d']) {
+                this.x = Math.min(WORLD.width - this.size, this.x + this.speed);
+                moveX = 1;
+                isMoving = true;
+            }
+
+            // Update facing direction
+            if (moveX !== 0) {
+                this.facingRight = moveX > 0;
+            }
+
+            // Update animation state - shield has highest priority, then hurt, then attack, then movement
+            if (this.shielded) {
+                this.animationState = 'protect';
+            } else if (this.isHurt) {
+                this.animationState = 'hurt';
+            } else if (this.isAttacking) {
+                this.animationState = 'shot';
+            } else if (isMoving) {
+                this.animationState = 'walk';
+            } else {
+                this.animationState = 'idle';
+            }
+        }
+
+        // Reset animation if state changed to prevent flickering
+        // BUT don't reset idle when returning from shot (prevents blinking during auto-fire)
+        if (this.animationState !== this.previousAnimationState) {
+            const newSprite = this.sprites[this.animationState];
+            if (newSprite) {
+                // Don't reset idle animation if coming from shot animation
+                const isReturningToIdle = (this.previousAnimationState === 'shot' && this.animationState === 'idle');
+                if (!isReturningToIdle) {
+                    newSprite.reset();
+                }
+            }
+            this.previousAnimationState = this.animationState;
+        }
+
+        // Update current animation using player's OWN sprites
+        const currentSprite = this.sprites[this.animationState];
+        if (currentSprite) {
+            currentSprite.update(deltaTime);
+        }
+    }
+
+    startAttack(timestamp) {
+        this.isAttacking = true;
+        this.attackEndTime = timestamp + 400; // 400ms attack animation (longer for archer)
+
+        // Reset the shot animation to start from beginning
+        const shotSprite = this.sprites.shot;
+        if (shotSprite) {
+            shotSprite.reset();
+        }
+    }
+
+    startDash(targetX, targetY, timestamp) {
+        this.isDashing = true;
+        this.dashStartX = this.x;
+        this.dashStartY = this.y;
+        this.dashTargetX = targetX;
+        this.dashTargetY = targetY;
+        this.dashStartTime = timestamp;
+        this.dashTrail = [{ x: this.x, y: this.y, alpha: 1 }];
+
+        // Update facing direction for dash
+        if (targetX !== this.x) {
+            this.facingRight = targetX > this.x;
+        }
+    }
+
+    takeDamage(amount, timestamp) {
+        // Can't take damage if shielded or invulnerable
+        if (this.shielded || this.isInvulnerable) {
+            return false;
+        }
+
+        this.health -= amount;
+        this.isInvulnerable = true;
+        this.invulnerabilityEndTime = timestamp + this.invulnerabilityDuration;
+
+        // Trigger hurt animation (3 frames at 8 fps = 375ms)
+        this.isHurt = true;
+        this.hurtEndTime = timestamp + 375;
+
+        // Reset hurt animation to start from beginning
+        const hurtSprite = this.sprites.hurt;
+        if (hurtSprite) {
+            hurtSprite.reset();
+        }
+
+        // Check if dead
+        if (this.health <= 0) {
+            this.health = 0;
+            return true; // Returns true if dead
+        }
+
+        return false; // Still alive
+    }
+
+    draw() {
+        // Draw dash trail with sprite
+        if (this.isDashing && this.dashTrail.length > 1) {
+            for (let i = 0; i < this.dashTrail.length - 1; i++) {
+                const trail = this.dashTrail[i];
+                const alpha = (i / this.dashTrail.length) * 0.4;
+
+                ctx.globalAlpha = alpha;
+                const trailSprite = this.sprites.run;
+                if (trailSprite && trailSprite.loaded) {
+                    trailSprite.draw(ctx, trail.x, trail.y, this.spriteScale * 0.8, !this.facingRight);
+                }
+            }
+            ctx.globalAlpha = 1.0;
+        }
+
+        // Shield is now only visible through the protect sprite animation (no glow effect)
+
+        // Draw samurai sprite using player's OWN sprites
+        const currentSprite = this.sprites[this.animationState];
+        if (currentSprite && currentSprite.loaded) {
+            // No visual glow effect when shielded (removed circle)
+            // Shield is only visible through the protect animation sprite itself
+            if (this.shielded) {
+                currentSprite.draw(ctx, this.x, this.y, this.spriteScale, !this.facingRight);
+            }
+            // Flashing effect when invulnerable
+            else if (this.isInvulnerable) {
+                const flashSpeed = 100; // Flash every 100ms
+                const shouldShow = Math.floor(Date.now() / flashSpeed) % 2 === 0;
+                if (shouldShow) {
+                    ctx.globalAlpha = 0.5;
+                    currentSprite.draw(ctx, this.x, this.y, this.spriteScale, !this.facingRight);
+                    ctx.globalAlpha = 1.0;
+                } else {
+                    currentSprite.draw(ctx, this.x, this.y, this.spriteScale, !this.facingRight);
+                }
+            } else {
+                currentSprite.draw(ctx, this.x, this.y, this.spriteScale, !this.facingRight);
+            }
+        } else {
+            // Fallback: draw simple circle if sprite not loaded
+            // Don't draw cyan circle for shield - no visual indicator
+            ctx.fillStyle = '#000';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size / 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw health bar below character
+        const barWidth = 60;
+        const barHeight = 8;
+        const barX = this.x - barWidth / 2;
+        const barY = this.y + 45; // Position below the sprite
+
+        // Background (black with border)
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(barX, barY, barWidth, barHeight);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(barX, barY, barWidth, barHeight);
+
+        // Health fill
+        const healthPercentage = this.health / this.maxHealth;
+        const fillWidth = barWidth * healthPercentage;
+
+        // Color based on health percentage
+        let healthColor;
+        if (healthPercentage <= 0.25) {
+            healthColor = '#8B0000'; // Dark red
+        } else if (healthPercentage <= 0.5) {
+            healthColor = '#FF4500'; // Orange-red
+        } else {
+            healthColor = '#ff0000'; // Normal red
+        }
+
+        ctx.fillStyle = healthColor;
+        ctx.fillRect(barX, barY, fillWidth, barHeight);
+
+        // Debug: Draw hitbox (optional, can be removed)
+        if (false) { // Set to true to see hitbox
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+    }
+}
+
+// Arrow Class (renamed from Shuriken)
+class Shuriken {
+    constructor(x, y, targetX, targetY) {
+        this.x = x;
+        this.y = y;
+        this.size = 8;
+        this.speed = 6; // Reduced from 10 to 6
+
+        // Calculate direction to target
+        const dx = targetX - x;
+        const dy = targetY - y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        this.vx = (dx / distance) * this.speed;
+        this.vy = (dy / distance) * this.speed;
+
+        // Calculate angle for arrow rotation (pointing towards target)
+        this.angle = Math.atan2(dy, dx);
+    }
+
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+    }
+
+    draw() {
+        if (arrowSprite && arrowSprite.complete) {
+            // Draw arrow sprite rotated towards direction (LARGER with strong yellow glow)
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.angle);
+
+            // Draw the arrow sprite MUCH LARGER (80x80 for better visibility)
+            const arrowWidth = 80;
+            const arrowHeight = 80;
+
+            // STRONG yellow glow (increased shadowBlur for better visibility)
+            ctx.shadowColor = '#FFD700';
+            ctx.shadowBlur = 25;
+            ctx.globalAlpha = 1.0;
+
+            // Tint the arrow white
+            ctx.filter = 'brightness(2) saturate(0)';
+            ctx.drawImage(
+                arrowSprite,
+                -arrowWidth / 2,
+                -arrowHeight / 2,
+                arrowWidth,
+                arrowHeight
+            );
+            ctx.filter = 'none';
+
+            ctx.restore();
+        } else {
+            // Fallback: draw simple white arrow shape LARGER (optimized)
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.angle);
+
+            // STRONG yellow glow (increased shadowBlur)
+            ctx.shadowColor = '#FFD700';
+            ctx.shadowBlur = 25;
+            ctx.globalAlpha = 1.0;
+
+            // Arrow shaft (white) - BIGGER
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(-24, -3, 40, 6);
+
+            // Arrow head (white) - BIGGER
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.moveTo(16, 0);
+            ctx.lineTo(8, -7);
+            ctx.lineTo(8, 7);
+            ctx.closePath();
+            ctx.fill();
+
+            // Arrow feathers (white with slight blue tint) - BIGGER
+            ctx.fillStyle = '#E0F0FF';
+            ctx.beginPath();
+            ctx.moveTo(-24, 0);
+            ctx.lineTo(-29, -4);
+            ctx.lineTo(-29, 4);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.restore();
+        }
+    }
+
+    isOffWorld() {
+        return this.x < -100 || this.x > WORLD.width + 100 ||
+               this.y < -100 || this.y > WORLD.height + 100;
+    }
+}
+
+// Enemy Class
+class Enemy {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.size = 30; // Hitbox size (increased from 25)
+        this.spriteScale = 0.65; // Scale up sprites (was 0.5)
+        this.speed = 2.0;
+        this.health = 1;
+
+        // Death state
+        this.isDying = false;
+        this.deathStartTime = 0;
+        this.deathDuration = 700; // ms
+
+        // Stuck detection
+        this.lastX = x;
+        this.lastY = y;
+        this.stuckTimer = 0;
+        this.stuckThreshold = 200; // ms without significant movement = stuck (reduced for faster detection)
+
+        // Each enemy gets its OWN sprite instances using the same images that work
+        this.sprites = {
+            idle: new SpriteAnimator('assets/Kunoichi/Idle.png', 128, 128, 9, 8, true),
+            walk: new SpriteAnimator('assets/Kunoichi/Walk.png', 128, 128, 8, 12, true),
+            dead: new SpriteAnimator('assets/Kunoichi/Dead.png', 128, 128, 10, 8, false), // Don't loop death animation
+        };
+
+        // Sprite animation state
+        this.animationState = 'walk';
+        this.facingRight = true;
+    }
+
+    update(playerX, playerY, deltaTime, timestamp, allEnemies) {
+        // If dying, don't move
+        if (this.isDying) {
+            // Update death animation
+            const currentSprite = this.sprites[this.animationState];
+            if (currentSprite) {
+                currentSprite.update(deltaTime);
+            }
+            return;
+        }
+
+        // Check if enemy has moved significantly
+        const movementDist = Math.sqrt(
+            (this.x - this.lastX) ** 2 + (this.y - this.lastY) ** 2
+        );
+
+        if (movementDist < 1.0) {
+            // Not moving much, increase stuck timer
+            this.stuckTimer += deltaTime;
+        } else {
+            // Moving fine, reset stuck timer
+            this.stuckTimer = 0;
+            this.lastX = this.x;
+            this.lastY = this.y;
+        }
+
+        const isStuck = this.stuckTimer > this.stuckThreshold;
+
+        // Move towards player
+        const dx = playerX - this.x;
+        const dy = playerY - this.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance > 0) {
+            // Calculate desired movement
+            let moveX = (dx / distance) * this.speed;
+            let moveY = (dy / distance) * this.speed;
+
+            // Add separation force from nearby enemies
+            let separationX = 0;
+            let separationY = 0;
+            let nearbyCount = 0;
+
+            for (let other of allEnemies) {
+                if (other === this || other.isDying) continue;
+
+                const distToOther = Math.sqrt(
+                    (this.x - other.x) ** 2 + (this.y - other.y) ** 2
+                );
+
+                // If very close, add separation force
+                if (distToOther < this.size + other.size) {
+                    // MUCH stronger push if stuck - increased from 3.5 to 5.0
+                    const pushStrength = isStuck ? 5.0 : 0.6;
+                    const pushX = (this.x - other.x) / distToOther;
+                    const pushY = (this.y - other.y) / distToOther;
+
+                    separationX += pushX * pushStrength;
+                    separationY += pushY * pushStrength;
+                    nearbyCount++;
+                }
+            }
+
+            // Average the separation force
+            if (nearbyCount > 0) {
+                separationX /= nearbyCount;
+                separationY /= nearbyCount;
+
+                if (isStuck) {
+                    // If stuck, prioritize separation over player movement
+                    moveX = moveX * 0.1 + separationX * 0.9;
+                    moveY = moveY * 0.1 + separationY * 0.9;
+
+                    // MUCH larger jitter to break deadlock - increased from 2.5 to 4.0
+                    moveX += (Math.random() - 0.5) * 4.0;
+                    moveY += (Math.random() - 0.5) * 4.0;
+                } else {
+                    // Normal blend
+                    moveX = moveX * 0.7 + separationX * 0.3;
+                    moveY = moveY * 0.7 + separationY * 0.3;
+
+                    // Small jitter
+                    moveX += (Math.random() - 0.5) * 0.4;
+                    moveY += (Math.random() - 0.5) * 0.4;
+                }
+            }
+
+            // Apply movement with collision check
+            const newX = this.x + moveX;
+            const newY = this.y + moveY;
+
+            let canMoveX = true;
+            let canMoveY = true;
+
+            // If stuck for too long, IGNORE collisions temporarily to break free
+            if (!isStuck) {
+                for (let other of allEnemies) {
+                    if (other === this || other.isDying) continue;
+
+                    // Check X movement
+                    const distIfMoveX = Math.sqrt(
+                        (newX - other.x) ** 2 + (this.y - other.y) ** 2
+                    );
+                    if (distIfMoveX < this.size + other.size - 10) {
+                        canMoveX = false;
+                    }
+
+                    // Check Y movement
+                    const distIfMoveY = Math.sqrt(
+                        (this.x - other.x) ** 2 + (newY - other.y) ** 2
+                    );
+                    if (distIfMoveY < this.size + other.size - 10) {
+                        canMoveY = false;
+                    }
+                }
+            }
+
+            // Apply movement independently for X and Y
+            if (canMoveX || isStuck) {
+                this.x = Math.max(this.size, Math.min(WORLD.width - this.size, newX));
+            }
+            if (canMoveY || isStuck) {
+                this.y = Math.max(this.size, Math.min(WORLD.height - this.size, newY));
+            }
+
+            // Update facing direction
+            if (dx !== 0) {
+                this.facingRight = dx > 0;
+            }
+
+            // Just use walk animation
+            this.animationState = 'walk';
+        } else {
+            this.animationState = 'idle';
+        }
+
+        // Update THIS enemy's own animation
+        const currentSprite = this.sprites[this.animationState];
+        if (currentSprite) {
+            currentSprite.update(deltaTime);
+        }
+    }
+
+    startDeath(timestamp) {
+        this.isDying = true;
+        this.deathStartTime = timestamp;
+        this.animationState = 'dead';
+
+        // Reset death animation to start from beginning
+        const deathSprite = this.sprites.dead;
+        if (deathSprite) {
+            deathSprite.reset();
+        }
+    }
+
+    isDeathAnimationComplete(timestamp) {
+        return this.isDying && (timestamp - this.deathStartTime) > this.deathDuration;
+    }
+
+    draw() {
+        // Fade out if dying (but keep visible at 30% opacity permanently)
+        if (this.isDying) {
+            const elapsed = performance.now() - this.deathStartTime;
+            const fadeProgress = Math.min(elapsed / this.deathDuration, 1);
+            // Keep at minimum 30% opacity forever
+            ctx.globalAlpha = Math.max(0.3, 1 - (fadeProgress * 0.7));
+        }
+
+        // Draw enemy sprite using its OWN sprite instance
+        const currentSprite = this.sprites[this.animationState];
+        if (currentSprite && currentSprite.loaded) {
+            currentSprite.draw(ctx, this.x, this.y, this.spriteScale, !this.facingRight);
+        } else {
+            // Fallback: draw simple circle if sprite not loaded
+            ctx.fillStyle = '#f00';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size / 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Reset alpha
+        if (this.isDying) {
+            ctx.globalAlpha = 1.0;
+        }
+
+        // Debug: Draw hitbox (optional)
+        if (false) { // Set to true to see hitbox
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+    }
+}
+
+// Blood Puddle Class - Permanent blood stains on ground
+class BloodPuddle {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.size = Math.random() * 15 + 20; // 20-35 pixels radius for puddle
+        this.opacity = 0.7 + Math.random() * 0.2; // 0.7-0.9 opacity
+        this.rotation = Math.random() * Math.PI * 2; // Random rotation
+        this.color = Math.random() > 0.5 ? '#8B0000' : '#DC143C'; // Dark red or crimson
+
+        // Create random splatter pattern
+        this.splatters = [];
+        const splatterCount = Math.floor(Math.random() * 5) + 3; // 3-7 splatters
+        for (let i = 0; i < splatterCount; i++) {
+            this.splatters.push({
+                offsetX: (Math.random() - 0.5) * this.size * 1.5,
+                offsetY: (Math.random() - 0.5) * this.size * 1.5,
+                size: Math.random() * 8 + 4 // 4-12 pixels
+            });
+        }
+    }
+
+    draw() {
+        ctx.save();
+        ctx.globalAlpha = this.opacity;
+
+        // Main puddle
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw splatters around puddle
+        for (let splatter of this.splatters) {
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(
+                this.x + splatter.offsetX,
+                this.y + splatter.offsetY,
+                splatter.size,
+                0,
+                Math.PI * 2
+            );
+            ctx.fill();
+        }
+
+        // Add some darker center for depth
+        ctx.fillStyle = '#5A0000'; // Darker red
+        ctx.globalAlpha = this.opacity * 0.6;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+}
+
+// Blood Particle Class
+class BloodParticle {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() - 0.5) * 4;
+        this.vy = (Math.random() - 0.5) * 4 - 2; // Upward bias
+        this.size = Math.random() * 6 + 4; // Larger particles for realistic blood stains (4-10 pixels)
+        this.lifetime = 0;
+        this.maxLifetime = 1000; // 1 second
+        this.color = Math.random() > 0.5 ? '#8B0000' : '#DC143C'; // Dark red or crimson
+        this.settled = false; // Whether particle has settled on ground
+        this.settledY = 0; // Y position where it settled
+    }
+
+    update(deltaTime) {
+        // Only update physics if not settled
+        if (!this.settled) {
+            this.x += this.vx;
+            this.y += this.vy;
+            this.vy += 0.15; // Gravity
+            this.vx *= 0.98; // Air resistance
+
+            // Check if particle has settled (low velocity and has fallen)
+            if (Math.abs(this.vx) < 0.1 && this.vy > 0 && this.vy < 0.5 && this.lifetime > 200) {
+                this.settled = true;
+                this.settledY = this.y;
+                this.vx = 0;
+                this.vy = 0;
+            }
+        }
+
+        this.lifetime += deltaTime;
+    }
+
+    draw() {
+        // Keep particles visible permanently (don't fade out completely)
+        const alpha = Math.max(0.7, 1 - (this.lifetime / this.maxLifetime));
+        ctx.fillStyle = this.color;
+        ctx.globalAlpha = alpha;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
+    }
+
+    isDead() {
+        return this.lifetime >= this.maxLifetime;
+    }
+}
+
+// Bamboo Class con 3 etapas de crecimiento
+class Bamboo {
+    constructor(x, y, currentWave) {
+        this.x = x;
+        this.y = y;
+        this.size = 15;
+        this.plantedWave = currentWave;
+        // Crecimiento en 1-3 rondas
+        this.wavesToGrow = Math.floor(Math.random() * 3) + 1; // 1, 2, or 3
+        this.matureWave = this.plantedWave + this.wavesToGrow;
+        this.hits = 0; // Golpes recibidos
+        this.maxHits = 3; // Golpes necesarios para talar
+    }
+
+    update(currentWave) {
+        // No need to do anything, growth is based on wave comparison
+    }
+
+    getGrowthStage(currentWave) {
+        const wavesGrown = currentWave - this.plantedWave;
+
+        if (wavesGrown === 0) {
+            return 'seed'; // Recién plantado
+        } else if (wavesGrown < this.wavesToGrow) {
+            return 'growing'; // Creciendo
+        } else {
+            return 'mature'; // Maduro
+        }
+    }
+
+    canHarvest(currentWave) {
+        return this.getGrowthStage(currentWave) === 'mature';
+    }
+
+    hit() {
+        this.hits++;
+        return this.hits >= this.maxHits;
+    }
+
+    draw() {
+        const currentStage = this.getGrowthStage(GAME_STATE.wave);
+
+        if (currentStage === 'seed') {
+            // Etapa 1: Semilla/brote pequeño
+            ctx.fillStyle = '#8B4513'; // Marrón tierra
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Brote verde pequeño
+            ctx.fillStyle = '#90EE90';
+            ctx.beginPath();
+            ctx.moveTo(this.x, this.y - 5);
+            ctx.lineTo(this.x - 3, this.y);
+            ctx.lineTo(this.x + 3, this.y);
+            ctx.closePath();
+            ctx.fill();
+
+        } else if (currentStage === 'growing') {
+            // Etapa 2: Creciendo - mediano
+            const height = 25;
+            const width = 4;
+
+            // Tallo mediano
+            ctx.fillStyle = '#7CFC00'; // Verde lima
+            ctx.fillRect(this.x - width/2, this.y - height, width, height);
+
+            // Segmentos
+            ctx.strokeStyle = '#228B22';
+            ctx.lineWidth = 2;
+            for (let i = 0; i < 2; i++) {
+                ctx.beginPath();
+                ctx.moveTo(this.x - 4, this.y - (i * 12) - 5);
+                ctx.lineTo(this.x + 4, this.y - (i * 12) - 5);
+                ctx.stroke();
+            }
+
+            // Hojas pequeñas
+            ctx.fillStyle = '#32CD32';
+            ctx.beginPath();
+            ctx.ellipse(this.x - 6, this.y - height, 6, 3, Math.PI / 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.ellipse(this.x + 6, this.y - height, 6, 3, -Math.PI / 4, 0, Math.PI * 2);
+            ctx.fill();
+
+        } else {
+            // Etapa 3: Maduro - grande y completo
+            const height = 45;
+            const width = 6;
+
+            // Tallo grande
+            ctx.fillStyle = '#228B22'; // Verde oscuro
+            ctx.fillRect(this.x - width/2, this.y - height, width, height);
+
+            // Segmentos
+            ctx.strokeStyle = '#1C6E1C';
+            ctx.lineWidth = 2;
+            for (let i = 0; i < 3; i++) {
+                ctx.beginPath();
+                ctx.moveTo(this.x - 6, this.y - (i * 15) - 8);
+                ctx.lineTo(this.x + 6, this.y - (i * 15) - 8);
+                ctx.stroke();
+            }
+
+            // Hojas grandes
+            ctx.fillStyle = '#32CD32';
+            for (let i = 0; i < 4; i++) {
+                const angle = (i * Math.PI) / 2;
+                const offsetX = Math.cos(angle) * 10;
+                const offsetY = Math.sin(angle) * 5;
+                ctx.beginPath();
+                ctx.ellipse(this.x + offsetX, this.y - height + offsetY, 8, 4, angle, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Indicador listo para talar
+            ctx.fillStyle = '#FFD700';
+            ctx.font = 'bold 14px Arial';
+            ctx.fillText('✓', this.x - 7, this.y - height - 5);
+        }
+
+        // Mostrar indicador de golpes si está siendo talado
+        if (this.hits > 0 && currentStage === 'mature') {
+            ctx.fillStyle = '#FF0000';
+            ctx.font = 'bold 12px Arial';
+            ctx.fillText(`${this.hits}/${this.maxHits}`, this.x - 12, this.y + 15);
+        }
+    }
+}
+
+// WoodDrop Class - Madera que cae al suelo
+class WoodDrop {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.size = 8;
+        this.collected = false;
+    }
+
+    draw() {
+        // Dibujar madera
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(this.x - this.size, this.y - this.size/2, this.size * 2, this.size);
+
+        // Borde
+        ctx.strokeStyle = '#654321';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(this.x - this.size, this.y - this.size/2, this.size * 2, this.size);
+
+        // Detalles de madera
+        ctx.strokeStyle = '#A0522D';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 3; i++) {
+            ctx.beginPath();
+            ctx.moveTo(this.x - this.size + (i * 5), this.y - this.size/2);
+            ctx.lineTo(this.x - this.size + (i * 5), this.y + this.size/2);
+            ctx.stroke();
+        }
+
+        // Icono flotante
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 12px Arial';
+        ctx.fillText('🪵', this.x - 6, this.y - 15);
+    }
+}
+
+// Game Objects
+const ninja = new Ninja(WORLD.width / 2, WORLD.height / 2);
+const shurikens = [];
+const enemies = [];
+const bamboos = [];
+const woodDrops = [];
+const bloodParticles = [];
+const bloodPuddles = []; // Permanent blood stains on ground
+
+let lastShurikenTime = 0;
+let shurikenCooldown = 500; // ms between shurikens
+
+let lastEnemySpawnTime = 0;
+let enemySpawnRate = 1000; // ms between enemy spawns
+
+// Shooting range - character only shoots enemies within this distance
+const SHOOTING_RANGE = 350; // pixels
+
+// Maximum number of shurikens allowed to prevent lag
+const MAX_SHURIKENS = 80;
+
+let lastFrameTime = 0;
+
+// Keyboard Input
+document.addEventListener('keydown', (e) => {
+    ninja.keys[e.key] = true;
+
+    // Handle abilities
+    const key = e.key.toLowerCase();
+    const timestamp = performance.now();
+
+    if (key === ABILITIES.dash.key) {
+        ABILITIES.dash.use(timestamp);
+    } else if (key === ABILITIES.burst.key) {
+        ABILITIES.burst.use(timestamp);
+    } else if (key === ABILITIES.shield.key) {
+        ABILITIES.shield.use(timestamp);
+    } else if (key === 'p') {
+        // Plantar bambú
+        if (GAME_STATE.resources.bambooSeeds > 0) {
+            bamboos.push(new Bamboo(ninja.x, ninja.y, GAME_STATE.wave));
+            GAME_STATE.resources.bambooSeeds--;
+        }
+    } else if (key === 'h') {
+        // Activar/desactivar modo hacha
+        GAME_STATE.axeMode = !GAME_STATE.axeMode;
+        if (GAME_STATE.axeMode) {
+            GAME_STATE.axeModeStartTime = timestamp;
+        }
+    } else if (key === 'v') {
+        // Vender madera al vendedor
+        if (vendor.isPlayerNear() && GAME_STATE.resources.wood > 0) {
+            GAME_STATE.resources.wood--;
+            GAME_STATE.resources.gold += 10;
+        }
+    } else if (key === 't') {
+        // Abrir/cerrar tienda
+        if (GAME_STATE.shopOpen) {
+            closeShop();
+        } else {
+            showShop();
+        }
+    }
+});
+
+document.addEventListener('keyup', (e) => {
+    ninja.keys[e.key] = false;
+});
+
+// Helper Functions
+function findNearestEnemy() {
+    if (enemies.length === 0) return null;
+
+    let nearest = null;
+    let minDist = Infinity;
+
+    for (let enemy of enemies) {
+        // Skip enemies that are dying
+        if (enemy.isDying) continue;
+
+        const dist = distance(ninja.x, ninja.y, enemy.x, enemy.y);
+        if (dist < minDist) {
+            minDist = dist;
+            nearest = enemy;
+        }
+    }
+
+    return nearest;
+}
+
+function distance(x1, y1, x2, y2) {
+    return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+}
+
+// Optimized: Squared distance (avoids expensive sqrt for collision detection)
+function distanceSquared(x1, y1, x2, y2) {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    return dx * dx + dy * dy;
+}
+
+function spawnEnemy() {
+    // Spawn at random position around the player (outside camera view)
+    const spawnDistance = 600; // Increased for larger canvas
+    const angle = Math.random() * Math.PI * 2;
+
+    let x = ninja.x + Math.cos(angle) * spawnDistance;
+    let y = ninja.y + Math.sin(angle) * spawnDistance;
+
+    // Clamp to world bounds
+    x = Math.max(20, Math.min(WORLD.width - 20, x));
+    y = Math.max(20, Math.min(WORLD.height - 20, y));
+
+    enemies.push(new Enemy(x, y));
+}
+
+function checkCollisions() {
+    // Check shuriken-enemy collisions (OPTIMIZED: using squared distance)
+    for (let i = shurikens.length - 1; i >= 0; i--) {
+        for (let j = enemies.length - 1; j >= 0; j--) {
+            // Skip dying enemies
+            if (enemies[j].isDying) continue;
+
+            // Optimized: Use squared distance to avoid expensive sqrt
+            const distSq = distanceSquared(
+                shurikens[i].x, shurikens[i].y,
+                enemies[j].x, enemies[j].y
+            );
+            const hitRadiusSum = shurikens[i].size + enemies[j].size;
+            const hitRadiusSumSq = hitRadiusSum * hitRadiusSum;
+
+            if (distSq < hitRadiusSumSq) {
+                // Hit!
+                const enemyX = enemies[j].x;
+                const enemyY = enemies[j].y;
+
+                shurikens.splice(i, 1);
+
+                // Start death animation instead of removing immediately
+                enemies[j].startDeath(performance.now());
+
+                // Create blood puddle on ground (permanent)
+                bloodPuddles.push(new BloodPuddle(enemyX, enemyY));
+
+                // Create blood particles (OPTIMIZED: reduced from 25 to 12 for better performance)
+                for (let k = 0; k < 12; k++) {
+                    bloodParticles.push(new BloodParticle(enemyX, enemyY));
+                }
+
+                GAME_STATE.score += 10;
+                GAME_STATE.enemiesKilled++;
+                GAME_STATE.enemiesThisWave--;
+
+                // Add gold (more gold in higher waves)
+                const goldGain = 5 + Math.floor(GAME_STATE.wave / 2);
+                GAME_STATE.resources.gold += goldGain;
+
+                // Random chance to get a bamboo seed (10% chance)
+                if (Math.random() < 0.1) {
+                    GAME_STATE.resources.bambooSeeds++;
+                }
+
+                // Check if all enemies in this wave are killed
+                if (GAME_STATE.enemiesThisWave <= 0) {
+                    // Check if all enemies are dead or dying
+                    const aliveEnemies = enemies.filter(e => !e.isDying).length;
+                    if (aliveEnemies === 0) {
+                        startWaveBreak();
+                    }
+                }
+
+                break;
+            }
+        }
+    }
+
+    // Check ninja-enemy collisions - skip if shielded, invulnerable, or enemy is dying (OPTIMIZED)
+    if (!ninja.shielded && !ninja.isInvulnerable) {
+        for (let enemy of enemies) {
+            if (enemy.isDying) continue; // Don't collide with dying enemies
+
+            // Optimized: Use squared distance
+            const distSq = distanceSquared(ninja.x, ninja.y, enemy.x, enemy.y);
+            const hitRadiusSum = ninja.size + enemy.size;
+            const hitRadiusSumSq = hitRadiusSum * hitRadiusSum;
+
+            if (distSq < hitRadiusSumSq) {
+                // Take damage (20 HP per hit)
+                const isDead = ninja.takeDamage(20, performance.now());
+                if (isDead) {
+                    gameOver();
+                }
+                break; // Only one enemy can hit per frame
+            }
+        }
+    }
+}
+
+function checkBambooAxeCollision() {
+    if (!GAME_STATE.axeMode) return;
+
+    const axeRange = 50; // Rango del hacha
+
+    for (let i = bamboos.length - 1; i >= 0; i--) {
+        const bamboo = bamboos[i];
+        const dist = distance(ninja.x, ninja.y, bamboo.x, bamboo.y);
+
+        if (dist < axeRange && bamboo.canHarvest(GAME_STATE.wave)) {
+            // Golpear bambú
+            const isCut = bamboo.hit();
+
+            if (isCut) {
+                // Bambú talado! Crear madera en el suelo
+                for (let j = 0; j < 3; j++) {
+                    const offsetX = (Math.random() - 0.5) * 30;
+                    const offsetY = (Math.random() - 0.5) * 30;
+                    woodDrops.push(new WoodDrop(bamboo.x + offsetX, bamboo.y + offsetY));
+                }
+
+                // Eliminar bambú
+                bamboos.splice(i, 1);
+            }
+
+            // Desactivar modo hacha después del golpe
+            GAME_STATE.axeMode = false;
+            break;
+        }
+    }
+}
+
+function checkWoodPickup() {
+    const pickupRange = 30;
+
+    for (let i = woodDrops.length - 1; i >= 0; i--) {
+        const wood = woodDrops[i];
+        const dist = distance(ninja.x, ninja.y, wood.x, wood.y);
+
+        if (dist < pickupRange && !wood.collected) {
+            // Recoger madera
+            GAME_STATE.resources.wood++;
+            wood.collected = true;
+            woodDrops.splice(i, 1);
+        }
+    }
+}
+
+function startWaveBreak() {
+    GAME_STATE.wave++;
+    GAME_STATE.isWaveBreak = true;
+    GAME_STATE.waveBreakEndTime = performance.now() + 30000; // 30 seconds
+
+    // Reset shop purchases for this wave
+    GAME_STATE.purchasesThisWave = 0;
+
+    // Clear all enemies
+    enemies.length = 0;
+
+    // Calculate enemies for next wave (increases with wave number)
+    GAME_STATE.totalEnemiesThisWave = 10 + (GAME_STATE.wave * 5);
+
+    // Update bamboos to check for growth
+    for (let bamboo of bamboos) {
+        bamboo.update(GAME_STATE.wave);
+    }
+
+    // Show wave break UI
+    const waveBreak = document.getElementById('waveBreak');
+    document.getElementById('breakWave').textContent = GAME_STATE.wave - 1;
+    waveBreak.classList.remove('hidden');
+
+    updateWaveBreakCountdown();
+}
+
+function updateWaveBreakCountdown() {
+    if (!GAME_STATE.isWaveBreak) return;
+
+    const remaining = Math.ceil((GAME_STATE.waveBreakEndTime - performance.now()) / 1000);
+
+    if (remaining > 0) {
+        document.getElementById('countdown').textContent = remaining;
+        setTimeout(updateWaveBreakCountdown, 100);
+    } else {
+        endWaveBreak();
+    }
+}
+
+function endWaveBreak() {
+    GAME_STATE.isWaveBreak = false;
+    document.getElementById('waveBreak').classList.add('hidden');
+
+    // Spawn all enemies for this wave
+    GAME_STATE.enemiesThisWave = GAME_STATE.totalEnemiesThisWave;
+    for (let i = 0; i < GAME_STATE.totalEnemiesThisWave; i++) {
+        spawnEnemy();
+    }
+}
+
+function gameOver() {
+    GAME_STATE.playing = false;
+    document.getElementById('finalScore').textContent = GAME_STATE.score;
+    document.getElementById('gameOver').classList.remove('hidden');
+
+    // Reset resources on game over
+    GAME_STATE.resources = {
+        bambooSeeds: 0,
+        wood: 0,
+        gold: 0
+    };
+    GAME_STATE.axeMode = false;
+    GAME_STATE.axeModeStartTime = 0;
+
+    // Reset player health for next game
+    ninja.health = ninja.maxHealth;
+    ninja.isInvulnerable = false;
+
+    // Clear all bamboos, wood drops, and blood puddles
+    bamboos.length = 0;
+    woodDrops.length = 0;
+    bloodPuddles.length = 0;
+}
+
+function updateHUD() {
+    document.getElementById('score').textContent = GAME_STATE.score;
+    document.getElementById('wave').textContent = GAME_STATE.wave;
+    document.getElementById('enemies').textContent = enemies.length;
+
+    // Update resources display
+    const resourcesHud = document.getElementById('resourcesHud');
+    if (resourcesHud) {
+        resourcesHud.innerHTML = `
+            🌱 Seeds: ${GAME_STATE.resources.bambooSeeds} |
+            🪵 Wood: ${GAME_STATE.resources.wood} |
+            💰 Gold: ${GAME_STATE.resources.gold}
+        `;
+    }
+
+    // Update ability cooldowns
+    const timestamp = performance.now();
+
+    updateAbilityUI('Q', ABILITIES.dash, timestamp);
+    updateAbilityUI('E', ABILITIES.burst, timestamp);
+    updateAbilityUI('R', ABILITIES.shield, timestamp);
+}
+
+function updateAbilityUI(key, ability, timestamp) {
+    const abilityEl = document.getElementById(`ability${key}`);
+    const cooldownEl = document.getElementById(`cooldown${key}`);
+
+    const timeSinceUse = timestamp - ability.lastUsed;
+    const cooldownRemaining = ability.cooldown - timeSinceUse;
+
+    if (cooldownRemaining <= 0) {
+        abilityEl.classList.remove('cooldown');
+        abilityEl.classList.add('ready');
+        cooldownEl.style.width = '100%';
+    } else {
+        abilityEl.classList.add('cooldown');
+        abilityEl.classList.remove('ready');
+        const percentage = ((ability.cooldown - cooldownRemaining) / ability.cooldown) * 100;
+        cooldownEl.style.width = percentage + '%';
+    }
+}
+
+function drawBackground() {
+    // Draw grid pattern
+    ctx.strokeStyle = '#2a2a2a';
+    ctx.lineWidth = 1;
+
+    const gridSize = 100;
+
+    // Vertical lines
+    const startX = Math.floor(camera.x / gridSize) * gridSize;
+    for (let x = startX; x < camera.x + camera.width; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, camera.y);
+        ctx.lineTo(x, camera.y + camera.height);
+        ctx.stroke();
+    }
+
+    // Horizontal lines
+    const startY = Math.floor(camera.y / gridSize) * gridSize;
+    for (let y = startY; y < camera.y + camera.height; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(camera.x, y);
+        ctx.lineTo(camera.x + camera.width, y);
+        ctx.stroke();
+    }
+
+    // Draw world border
+    ctx.strokeStyle = '#ff0000';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(0, 0, WORLD.width, WORLD.height);
+}
+
+// Main Game Loop
+function gameLoop(timestamp) {
+    const deltaTime = timestamp - lastFrameTime;
+    lastFrameTime = timestamp;
+
+    // Clear canvas
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Only update game logic if playing (not paused by upgrade menu)
+    if (GAME_STATE.playing) {
+        // Update ninja
+        ninja.update(timestamp, deltaTime);
+
+        // Update abilities
+        ABILITIES.shield.update(timestamp);
+
+        // Check bamboo axe collision
+        checkBambooAxeCollision();
+
+        // Check wood pickup
+        checkWoodPickup();
+
+        // Update camera to follow ninja
+        camera.follow(ninja);
+
+        // Auto-fire shurikens at nearest enemy (only if within range)
+        if (timestamp - lastShurikenTime > shurikenCooldown) {
+            const target = findNearestEnemy();
+            if (target && shurikens.length < MAX_SHURIKENS) {
+                // Check if enemy is within shooting range
+                const distToTarget = distance(ninja.x, ninja.y, target.x, target.y);
+                if (distToTarget <= SHOOTING_RANGE) {
+                    shurikens.push(new Shuriken(ninja.x, ninja.y, target.x, target.y));
+                    ninja.startAttack(timestamp); // Trigger attack animation
+                    lastShurikenTime = timestamp;
+                }
+            }
+        }
+
+        // Update shurikens
+        for (let i = shurikens.length - 1; i >= 0; i--) {
+            shurikens[i].update();
+            if (shurikens[i].isOffWorld()) {
+                shurikens.splice(i, 1);
+            }
+        }
+
+        // Update enemies
+        for (let enemy of enemies) {
+            enemy.update(ninja.x, ninja.y, deltaTime, timestamp, enemies);
+        }
+
+        // Remove dead enemies (after death animation completes) to prevent lag
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            if (enemies[i].isDeathAnimationComplete(timestamp)) {
+                enemies.splice(i, 1);
+            }
+        }
+
+        // Update blood particles and remove old ones to prevent lag
+        for (let i = bloodParticles.length - 1; i >= 0; i--) {
+            bloodParticles[i].update(deltaTime);
+            if (bloodParticles[i].isDead()) {
+                bloodParticles.splice(i, 1);
+            }
+        }
+
+        // Check collisions
+        checkCollisions();
+
+        // Update and draw effects
+        for (let i = effects.length - 1; i >= 0; i--) {
+            if (!effects[i].update(deltaTime)) {
+                effects.splice(i, 1);
+            } else {
+                effects[i].draw();
+            }
+        }
+    }
+
+    // Always render (even when paused)
+    // Save context and translate for camera
+    ctx.save();
+    ctx.translate(-camera.x, -camera.y);
+
+    // Draw background grid
+    drawBackground();
+
+    // Draw decorative floor tiles (only visible tiles for performance)
+    const visibleTiles = floorTiles.filter(tile => {
+        return tile.x >= camera.x - 50 &&
+               tile.x <= camera.x + camera.width + 50 &&
+               tile.y >= camera.y - 50 &&
+               tile.y <= camera.y + camera.height + 50;
+    });
+
+    for (let tile of visibleTiles) {
+        tile.draw();
+    }
+
+    // Draw blood puddles (rendered on top of floor tiles, permanent)
+    for (let puddle of bloodPuddles) {
+        puddle.draw();
+    }
+
+    // Draw bamboos
+    for (let bamboo of bamboos) {
+        bamboo.draw();
+    }
+
+    // Draw wood drops
+    for (let wood of woodDrops) {
+        wood.draw();
+    }
+
+    // Draw blood particles
+    for (let particle of bloodParticles) {
+        particle.draw();
+    }
+
+    // Draw vendor
+    vendor.draw();
+
+    // Draw everything
+    ninja.draw();
+
+    // Draw axe if active
+    if (GAME_STATE.axeMode) {
+        ctx.save();
+        ctx.translate(ninja.x, ninja.y);
+
+        // Rotate axe
+        const axeRotation = (performance.now() - GAME_STATE.axeModeStartTime) * 0.01;
+        ctx.rotate(axeRotation);
+
+        // Draw axe handle
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(-3, 0, 6, 30);
+
+        // Draw axe blade
+        ctx.fillStyle = '#C0C0C0';
+        ctx.beginPath();
+        ctx.moveTo(-15, 0);
+        ctx.lineTo(15, 0);
+        ctx.lineTo(10, -10);
+        ctx.lineTo(-10, -10);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+
+        // Draw axe range indicator
+        ctx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(ninja.x, ninja.y, 50, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    for (let shuriken of shurikens) {
+        shuriken.draw();
+    }
+    for (let enemy of enemies) {
+        enemy.draw();
+    }
+
+    // Restore context
+    ctx.restore();
+
+    // Update HUD
+    updateHUD();
+
+    // Continue loop (always, even when paused)
+    requestAnimationFrame(gameLoop);
+}
+
+// Resize canvas to fill window
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // Update camera dimensions to match new canvas size
+    camera.width = canvas.width;
+    camera.height = canvas.height;
+
+    console.log(`Canvas resized to: ${canvas.width}x${canvas.height}`);
+}
+
+// Initial resize
+resizeCanvas();
+
+// Handle window resize
+window.addEventListener('resize', resizeCanvas);
+
+// Continue to Next Wave button handler
+document.getElementById('continueWaveBtn').addEventListener('click', () => {
+    if (GAME_STATE.isWaveBreak) {
+        endWaveBreak();
+    }
+});
+
+// Start game
+console.log('Ninja Survivor - Game Starting!');
+console.log(`World size: ${WORLD.width}x${WORLD.height}`);
+console.log(`Canvas size: ${canvas.width}x${canvas.height}`);
+
+// Spawn initial enemies for wave 1
+GAME_STATE.enemiesThisWave = GAME_STATE.totalEnemiesThisWave;
+for (let i = 0; i < GAME_STATE.totalEnemiesThisWave; i++) {
+    spawnEnemy();
+}
+
+requestAnimationFrame(gameLoop);

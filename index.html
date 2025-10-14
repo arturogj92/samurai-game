@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ninja Survivor</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <div class="hud">
+            <div class="stat">Score: <span id="score">0</span></div>
+            <div class="stat">Wave: <span id="wave">1</span></div>
+            <div class="stat">Enemies: <span id="enemies">0</span></div>
+            <div class="stat" id="resourcesHud">🌱 Seeds: 0 | 🪵 Wood: 0 | 💰 Gold: 0</div>
+            <div class="abilities">
+                <div class="ability" id="abilityQ">
+                    <div class="ability-key">Q</div>
+                    <div class="ability-name">Dash</div>
+                    <div class="ability-cooldown" id="cooldownQ"></div>
+                </div>
+                <div class="ability" id="abilityE">
+                    <div class="ability-key">E</div>
+                    <div class="ability-name">Burst</div>
+                    <div class="ability-cooldown" id="cooldownE"></div>
+                </div>
+                <div class="ability" id="abilityR">
+                    <div class="ability-key">R</div>
+                    <div class="ability-name">Shield</div>
+                    <div class="ability-cooldown" id="cooldownR"></div>
+                </div>
+                <div class="ability bamboo-tool" id="abilityP">
+                    <div class="ability-key">P</div>
+                    <div class="ability-name">Plant</div>
+                </div>
+                <div class="ability bamboo-tool" id="abilityH">
+                    <div class="ability-key">H</div>
+                    <div class="ability-name">Axe</div>
+                </div>
+            </div>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+        <div id="gameOver" class="game-over hidden">
+            <h2>Game Over!</h2>
+            <p>Final Score: <span id="finalScore">0</span></p>
+            <button onclick="location.reload()">Play Again</button>
+        </div>
+        <div id="waveBreak" class="wave-break hidden">
+            <h2>Wave <span id="breakWave">1</span> Complete!</h2>
+            <p class="countdown">Next wave in: <span id="countdown">30</span>s</p>
+            <button id="continueWaveBtn" class="continue-wave-btn">Continue to Next Wave</button>
+        </div>
+        <div id="upgradeMenu" class="upgrade-menu hidden">
+            <h2>💰 Shop</h2>
+            <p class="upgrade-subtitle">Buy upgrades with gold</p>
+            <div class="upgrade-options" id="upgradeOptions">
+                <!-- Upgrade cards will be generated here -->
+            </div>
+        </div>
+    </div>
+    <div class="controls">
+        <p>Controls: WASD or Arrow Keys to move</p>
+        <p>Abilities: Q (Dash) | E (Shuriken Burst) | R (Shield)</p>
+        <p>Bamboo: P (Plant) | H (Hit bamboo 3x with Axe) | V (Sell Wood to Vendor)</p>
+        <p>T (Shop - Only during wave break, max 2 purchases) | Bamboo grows in 1-3 waves</p>
+    </div>
+    <script src="assets-loader.js"></script>
+    <script src="game.js"></script>
+    <script src="assets-integration.js"></script>
+</body>
+</html>
