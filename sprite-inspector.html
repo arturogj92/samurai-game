@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>🎨 Sprite Frame Inspector</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #222;
+            color: #fff;
+            font-family: monospace;
+        }
+        .main-container {
+            display: flex;
+            gap: 20px;
+        }
+        .controls {
+            margin: 10px 0;
+            padding: 15px;
+            background: #333;
+            border: 2px solid #666;
+        }
+        .controls input {
+            padding: 5px;
+            margin: 5px;
+            font-family: monospace;
+            width: 80px;
+        }
+        .controls button {
+            padding: 8px 15px;
+            margin: 5px;
+            background: #0a0;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .controls button:hover {
+            background: #0d0;
+        }
+        #sprite-container {
+            position: relative;
+            display: inline-block;
+        }
+        #sprite-canvas {
+            border: 2px solid #fff;
+            image-rendering: pixelated;
+            cursor: crosshair;
+            background: repeating-conic-gradient(#333 0% 25%, #444 0% 50%) 50% / 20px 20px;
+        }
+        #grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+        #selection {
+            position: absolute;
+            border: 4px solid #0f0;
+            pointer-events: none;
+            background: rgba(0, 255, 0, 0.3);
+            box-shadow: 0 0 20px #0f0;
+        }
+        #preview-container {
+            flex: 1;
+            min-width: 400px;
+        }
+        #preview {
+            border: 2px solid #0ff;
+            image-rendering: pixelated;
+            background: repeating-conic-gradient(#111 0% 25%, #222 0% 50%) 50% / 20px 20px;
+        }
+        #info {
+            margin-top: 10px;
+            font-size: 14px;
+            background: #000;
+            padding: 15px;
+            border: 2px solid #0f0;
+        }
+        .code {
+            color: #0f0;
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 10px;
+            padding: 10px;
+            background: #111;
+            border: 2px solid #0f0;
+        }
+        .frame-info {
+            font-size: 20px;
+            color: #ff0;
+            font-weight: bold;
+        }
+        #file-input {
+            padding: 10px;
+            margin: 10px 0;
+            background: #555;
+            border: 2px solid #888;
+            color: #fff;
+        }
+        .dimension-info {
+            background: #000;
+            padding: 10px;
+            margin: 10px 0;
+            border: 2px solid #f90;
+            color: #f90;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎨 Sprite Frame Inspector</h1>
+    <p style="font-size: 16px;">Carga cualquier PNG y configura el tamaño de frames para inspeccionarlos</p>
+
+    <div class="controls">
+        <strong>1. Cargar Sprite:</strong><br>
+        <input type="file" id="file-input" accept="image/png,image/jpg,image/jpeg">
+        <br><br>
+        <strong>2. Configurar Tamaño de Frame:</strong><br>
+        Frame Width: <input type="number" id="frame-width" value="128" min="1">
+        Frame Height: <input type="number" id="frame-height" value="256" min="1">
+        <br><br>
+        <strong>3. Ajustes Manuales (Offset y Spacing):</strong><br>
+        Offset X (inicio): <input type="number" id="offset-x" value="0" min="0">
+        Offset Y (inicio): <input type="number" id="offset-y" value="0" min="0">
+        <br>
+        Spacing X (entre frames): <input type="number" id="spacing-x" value="0" min="0">
+        Spacing Y (entre filas): <input type="number" id="spacing-y" value="0" min="0">
+        <br>
+        <button onclick="applyFrameSize()">Aplicar Grid</button>
+        <button onclick="resetToDefaults()">Reset</button>
+        <br><br>
+        <div class="dimension-info" id="dimension-info">
+            Esperando imagen...
+        </div>
+    </div>
+
+    <div class="controls">
+        <strong>Navegación:</strong>
+        <button onclick="moveTile(-1, 0)">← Izquierda</button>
+        <button onclick="moveTile(1, 0)">Derecha →</button>
+        <button onclick="moveTile(0, -1)">↑ Arriba</button>
+        <button onclick="moveTile(0, 1)">Abajo ↓</button>
+        <span class="frame-info" id="frame-display">Frame: -</span>
+    </div>
+
+    <div class="main-container">
+        <div>
+            <h3>Sprite Original</h3>
+            <div id="sprite-container">
+                <canvas id="sprite-canvas"></canvas>
+                <canvas id="grid-overlay"></canvas>
+                <div id="selection" style="display: none;"></div>
+            </div>
+            <div id="info">
+                <strong>👆 Carga una imagen PNG arriba</strong>
+            </div>
+        </div>
+
+        <div id="preview-container">
+            <h3>Frame Seleccionado (Ampliado)</h3>
+            <canvas id="preview" width="512" height="512"></canvas>
+        </div>
+    </div>
+
+    <script>
+        let img = null;
+        let frameWidth = 128;
+        let frameHeight = 256;
+        let offsetX = 0;
+        let offsetY = 0;
+        let spacingX = 0;
+        let spacingY = 0;
+        let cols = 0;
+        let rows = 0;
+        let selectedTileX = -1;
+        let selectedTileY = -1;
+        let selectedFrame = -1;
+
+        const canvas = document.getElementById('sprite-canvas');
+        const ctx = canvas.getContext('2d');
+        const gridCanvas = document.getElementById('grid-overlay');
+        const gridCtx = gridCanvas.getContext('2d');
+        const previewCanvas = document.getElementById('preview');
+        const previewCtx = previewCanvas.getContext('2d');
+        const info = document.getElementById('info');
+        const selection = document.getElementById('selection');
+        const fileInput = document.getElementById('file-input');
+
+        // File input handler
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                img = new Image();
+                img.onload = () => {
+                    loadSprite();
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function loadSprite() {
+            if (!img) return;
+
+            canvas.width = img.width;
+            canvas.height = img.height;
+            gridCanvas.width = img.width;
+            gridCanvas.height = img.height;
+
+            ctx.drawImage(img, 0, 0);
+
+            // Update dimension info
+            document.getElementById('dimension-info').innerHTML = `
+                📐 Imagen: ${img.width} x ${img.height}px<br>
+                🎯 Frame: ${frameWidth} x ${frameHeight}px<br>
+                📊 Grid: ${cols} columnas x ${rows} filas = ${cols * rows} frames totales
+            `;
+
+            applyFrameSize();
+            console.log('✅ Sprite cargado:', img.width, 'x', img.height);
+        }
+
+        function applyFrameSize() {
+            if (!img) {
+                alert('Primero carga una imagen!');
+                return;
+            }
+
+            frameWidth = parseInt(document.getElementById('frame-width').value);
+            frameHeight = parseInt(document.getElementById('frame-height').value);
+            offsetX = parseInt(document.getElementById('offset-x').value);
+            offsetY = parseInt(document.getElementById('offset-y').value);
+            spacingX = parseInt(document.getElementById('spacing-x').value);
+            spacingY = parseInt(document.getElementById('spacing-y').value);
+
+            // Calculate cols and rows considering spacing
+            const availableWidth = img.width - offsetX;
+            const availableHeight = img.height - offsetY;
+
+            cols = Math.floor((availableWidth + spacingX) / (frameWidth + spacingX));
+            rows = Math.floor((availableHeight + spacingY) / (frameHeight + spacingY));
+
+            // Update dimension info
+            document.getElementById('dimension-info').innerHTML = `
+                📐 Imagen: ${img.width} x ${img.height}px<br>
+                🎯 Frame: ${frameWidth} x ${frameHeight}px<br>
+                📍 Offset: X=${offsetX}, Y=${offsetY}<br>
+                📏 Spacing: X=${spacingX}, Y=${spacingY}<br>
+                📊 Grid: ${cols} columnas x ${rows} filas = ${cols * rows} frames totales
+            `;
+
+            drawGrid();
+        }
+
+        function resetToDefaults() {
+            document.getElementById('frame-width').value = 128;
+            document.getElementById('frame-height').value = 256;
+            document.getElementById('offset-x').value = 0;
+            document.getElementById('offset-y').value = 0;
+            document.getElementById('spacing-x').value = 0;
+            document.getElementById('spacing-y').value = 0;
+            applyFrameSize();
+        }
+
+        function drawGrid() {
+            if (!img) return;
+
+            gridCtx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
+            gridCtx.strokeStyle = '#0ff';
+            gridCtx.lineWidth = 2;
+
+            // Draw frame rectangles with spacing
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    const x = offsetX + col * (frameWidth + spacingX);
+                    const y = offsetY + row * (frameHeight + spacingY);
+
+                    // Draw frame border
+                    gridCtx.strokeRect(x, y, frameWidth, frameHeight);
+
+                    // Draw frame number
+                    const frame = (row * cols) + col;
+                    gridCtx.fillStyle = '#000';
+                    gridCtx.fillRect(x + 5, y + 5, 40, 20);
+                    gridCtx.fillStyle = '#0ff';
+                    gridCtx.font = 'bold 14px monospace';
+                    gridCtx.textAlign = 'left';
+                    gridCtx.textBaseline = 'top';
+                    gridCtx.fillText(frame, x + 10, y + 10);
+                }
+            }
+        }
+
+        canvas.addEventListener('click', (e) => {
+            if (!img) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor(e.clientX - rect.left);
+            const y = Math.floor(e.clientY - rect.top);
+
+            // Calculate which frame was clicked considering offset and spacing
+            const adjustedX = x - offsetX;
+            const adjustedY = y - offsetY;
+
+            selectedTileX = Math.floor(adjustedX / (frameWidth + spacingX));
+            selectedTileY = Math.floor(adjustedY / (frameHeight + spacingY));
+
+            // Clamp to valid range
+            selectedTileX = Math.max(0, Math.min(cols - 1, selectedTileX));
+            selectedTileY = Math.max(0, Math.min(rows - 1, selectedTileY));
+
+            selectTile(selectedTileX, selectedTileY);
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!img) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor(e.clientX - rect.left);
+            const y = Math.floor(e.clientY - rect.top);
+
+            const adjustedX = x - offsetX;
+            const adjustedY = y - offsetY;
+
+            const tileX = Math.floor(adjustedX / (frameWidth + spacingX));
+            const tileY = Math.floor(adjustedY / (frameHeight + spacingY));
+            const frame = (tileY * cols) + tileX;
+
+            if (selectedFrame >= 0) {
+                const pixelX = offsetX + selectedTileX * (frameWidth + spacingX);
+                const pixelY = offsetY + selectedTileY * (frameHeight + spacingY);
+
+                info.innerHTML = `
+                    Mouse: X=${x}, Y=${y} | Frame: (${tileX}, ${tileY}) #${frame}<br>
+                    <div class="code">
+                    ✅ FRAME SELECCIONADO:<br>
+                    Frame Index: ${selectedFrame}<br>
+                    Grid Position: Column ${selectedTileX}, Row ${selectedTileY}<br>
+                    Pixel Position: X=${pixelX}, Y=${pixelY}<br>
+                    Size: ${frameWidth}x${frameHeight}<br>
+                    <br>
+                    📋 Código Phaser:<br>
+                    this.load.spritesheet('key', 'path.png', {<br>
+                    &nbsp;&nbsp;frameWidth: ${frameWidth},<br>
+                    &nbsp;&nbsp;frameHeight: ${frameHeight}<br>
+                    });<br>
+                    frames: { start: 0, end: ${cols * rows - 1} }
+                    </div>
+                `;
+            } else {
+                info.innerHTML = `
+                    Mouse: X=${x}, Y=${y}<br>
+                    Frame: (${tileX}, ${tileY}) #${frame}<br>
+                    <strong>👆 Click en un frame para seleccionarlo</strong>
+                `;
+            }
+        });
+
+        function selectTile(tileX, tileY) {
+            selectedFrame = (tileY * cols) + tileX;
+
+            // Calculate position with offset and spacing
+            const x = offsetX + tileX * (frameWidth + spacingX);
+            const y = offsetY + tileY * (frameHeight + spacingY);
+
+            // Update selection box
+            selection.style.display = 'block';
+            selection.style.left = x + 'px';
+            selection.style.top = y + 'px';
+            selection.style.width = frameWidth + 'px';
+            selection.style.height = frameHeight + 'px';
+
+            // Update frame display
+            document.getElementById('frame-display').textContent = `Frame: ${selectedFrame} (Col ${tileX}, Row ${tileY})`;
+
+            // Update preview
+            updatePreview();
+        }
+
+        function updatePreview() {
+            if (selectedFrame < 0 || !img) return;
+
+            // Clear with transparent background
+            previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+
+            // Calculate source position with offset and spacing
+            const srcX = offsetX + selectedTileX * (frameWidth + spacingX);
+            const srcY = offsetY + selectedTileY * (frameHeight + spacingY);
+
+            // Calculate scale to fit preview while maintaining aspect ratio
+            const scale = Math.min(
+                previewCanvas.width / frameWidth,
+                previewCanvas.height / frameHeight
+            );
+
+            const drawWidth = frameWidth * scale;
+            const drawHeight = frameHeight * scale;
+            const drawX = (previewCanvas.width - drawWidth) / 2;
+            const drawY = (previewCanvas.height - drawHeight) / 2;
+
+            // Draw the selected frame scaled up
+            previewCtx.drawImage(
+                img,
+                srcX, srcY, frameWidth, frameHeight,
+                drawX, drawY, drawWidth, drawHeight
+            );
+
+            // Draw border around the frame
+            previewCtx.strokeStyle = '#0f0';
+            previewCtx.lineWidth = 3;
+            previewCtx.strokeRect(drawX, drawY, drawWidth, drawHeight);
+        }
+
+        function moveTile(dx, dy) {
+            if (!img) return;
+
+            if (selectedTileX < 0) {
+                selectedTileX = 0;
+                selectedTileY = 0;
+            }
+
+            selectedTileX += dx;
+            selectedTileY += dy;
+
+            // Clamp
+            selectedTileX = Math.max(0, Math.min(cols - 1, selectedTileX));
+            selectedTileY = Math.max(0, Math.min(rows - 1, selectedTileY));
+
+            selectTile(selectedTileX, selectedTileY);
+        }
+
+        // Make functions available globally
+        window.applyFrameSize = applyFrameSize;
+        window.resetToDefaults = resetToDefaults;
+        window.moveTile = moveTile;
+    </script>
+</body>
+</html>

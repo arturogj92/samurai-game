@@ -7,26 +7,38 @@ export default class AbilitySystem {
         this.scene = scene;
 
         // Ability cooldowns (ms)
+        // Set lastUsed to -999999 so abilities start fully charged
         this.abilities = {
             dash: {
                 cooldown: 3000,
-                lastUsed: 0,
+                lastUsed: -999999,
                 enabled: true
             },
             burst: {
                 cooldown: 8000,
-                lastUsed: 0,
+                lastUsed: -999999,
                 enabled: true
             },
             shield: {
                 cooldown: 10000,
-                lastUsed: 0,
+                lastUsed: -999999,
                 duration: 3000,
                 enabled: true
             },
             chainLightning: {
                 cooldown: 12000,
-                lastUsed: 0,
+                lastUsed: -999999,
+                enabled: true
+            },
+            berserker: {
+                cooldown: 15000,
+                lastUsed: -999999,
+                duration: 6000,
+                enabled: true
+            },
+            summon: {
+                cooldown: 20000,
+                lastUsed: -999999,
                 enabled: true
             }
         };
@@ -35,10 +47,26 @@ export default class AbilitySystem {
         this.shieldActive = false;
         this.shieldEndTime = 0;
         this.shieldGraphic = null;
+        this.shieldParticles = [];
+        this.lastShieldParticleTime = 0;
+
+        // Burst charging state
+        this.isChargingBurst = false;
+        this.burstChargeStartTime = 0;
+        this.burstChargeLevel = 0; // 0-1 (max 3 seconds)
+        this.originalPlayerSpeed = 300; // Default player speed
+        this.burstChargeGraphic = null;
+
+        // Berserker state
+        this.berserkerActive = false;
+        this.berserkerEndTime = 0;
+        this.berserkerGraphic = null;
+        this.originalSpeed = null;
+        this.originalFireRate = null;
     }
 
     /**
-     * Dash ability (Q) - Quick dash in movement direction
+     * Dash ability (Q) - Quick dash in movement direction - ENHANCED VERSION
      */
     dash(time) {
         if (!this.canUseAbility('dash', time)) return false;
@@ -74,10 +102,22 @@ export default class AbilitySystem {
 
         // Make player invulnerable during dash
         player.isInvulnerable = true;
-        player.setAlpha(0.5);
+        player.setAlpha(0.7);
 
-        // Create dash trail effect
+        // Start position effects
+        this.createDashStartEffect(player.x, player.y);
+
+        // Create enhanced dash trail effect
         this.createDashTrail(player.x, player.y, dashX, dashY);
+
+        // Create afterimage trail
+        this.createAfterimageTrail(player, dashX, dashY, dashDuration);
+
+        // Create speed lines
+        this.createSpeedLines(player.x, player.y, dashX, dashY, dashDuration);
+
+        // Add dash glow to player
+        player.setTint(0x00ffff);
 
         // Tween to new position
         this.scene.tweens.add({
@@ -88,6 +128,11 @@ export default class AbilitySystem {
             ease: 'Power2',
             onComplete: () => {
                 player.setAlpha(1);
+                player.clearTint();
+
+                // End position effects
+                this.createDashEndEffect(dashX, dashY);
+
                 // Keep invulnerability for a bit longer
                 this.scene.time.delayedCall(200, () => {
                     player.isInvulnerable = false;
@@ -101,51 +146,120 @@ export default class AbilitySystem {
     }
 
     /**
-     * Burst ability (E) - Fire projectiles in all directions
+     * Start charging burst (called when E is pressed down)
      */
-    burst(time) {
+    startChargingBurst(time) {
         if (!this.canUseAbility('burst', time)) return false;
+        if (this.isChargingBurst) return false; // Already charging
+
+        const player = this.scene.player;
+
+        // Start charging
+        this.isChargingBurst = true;
+        this.burstChargeStartTime = time;
+        this.burstChargeLevel = 0;
+        this.originalPlayerSpeed = player.maxSpeed || 300;
+
+        // Visual effect - start glow
+        player.setTint(0xffff00);
+
+        console.log('⚡ Burst charging started!');
+        return true;
+    }
+
+    /**
+     * Release burst (called when E is released)
+     */
+    releaseBurst(time) {
+        if (!this.isChargingBurst) return false;
 
         const player = this.scene.player;
         const projectileCount = 12;
         const speed = 500;
         const angleStep = (Math.PI * 2) / projectileCount;
 
+        // Calculate charge level (0-1, max 3 seconds)
+        const chargeTime = time - this.burstChargeStartTime;
+        const chargeLevel = Math.min(chargeTime / 3000, 1);
+
+        // Scale based on charge: 0.7 to 1.2
+        const arrowScale = 0.7 + (chargeLevel * 0.5);
+        // Damage based on charge: 15 to 50
+        const arrowDamage = 15 + (chargeLevel * 35);
+
+        // Stop charging
+        this.isChargingBurst = false;
+        this.burstChargeLevel = 0;
+
+        // Destroy charge visual
+        if (this.burstChargeGraphic) {
+            this.burstChargeGraphic.destroy();
+            this.burstChargeGraphic = null;
+        }
+
+        // Restore player speed
+        player.maxSpeed = this.originalPlayerSpeed;
+
+        // Create explosion effect at center
+        this.createBurstExplosion(player.x, player.y);
+
+        // Screen flash
+        this.createBurstFlash();
+
+        // Camera shake (stronger with more charge)
+        this.scene.cameras.main.shake(250, 0.006 + (chargeLevel * 0.004));
+
+        // Rainbow colors for projectiles
+        const colors = [0xffff00, 0xff9900, 0xff0000, 0xff00ff, 0x9900ff, 0x0000ff,
+                      0x00ffff, 0x00ff00, 0x99ff00, 0xffff99, 0xff6699, 0x66ffff];
+
         for (let i = 0; i < projectileCount; i++) {
             const angle = angleStep * i;
-            const projectile = this.scene.projectiles.get(player.x, player.y, 'arrow');
 
-            if (!projectile) continue;
+            // Create projectile directly (same way as MouseFireSystem)
+            const Projectile = this.scene.projectiles.classType;
+            const projectile = new Projectile(
+                this.scene,
+                player.x,
+                player.y,
+                'arrow'
+            );
 
-            projectile.setActive(true);
-            projectile.setVisible(true);
-            projectile.body.setAllowGravity(false);
-            projectile.setCollideWorldBounds(false);
+            // Add to group for tracking
+            this.scene.projectiles.add(projectile);
 
-            projectile.damage = 15; // Less damage than normal shots
-            projectile.setScale(0.4);
-            projectile.setTint(0xffff00); // Yellow for burst shots
+            // Set frame 0 (flying arrow)
+            projectile.setFrame(0);
+
+            // Reset stuck state
+            projectile.stuckToEnemy = null;
+            projectile.stuckOffsetX = 0;
+            projectile.stuckOffsetY = 0;
+
+            // Scale and damage based on charge level
+            projectile.damage = arrowDamage;
+            projectile.setScale(arrowScale);
+            projectile.setTint(colors[i]);
 
             const velocityX = Math.cos(angle) * speed;
             const velocityY = Math.sin(angle) * speed;
 
             projectile.setVelocity(velocityX, velocityY);
             projectile.rotation = angle;
+
+            // Add trail effect to each projectile
+            this.createProjectileTrail(projectile, angle, colors[i]);
         }
 
-        // Visual effect - flash player
-        player.setTint(0xffff00);
-        this.scene.time.delayedCall(100, () => {
-            player.clearTint();
-        });
+        player.clearTint();
 
         this.abilities.burst.lastUsed = time;
-        console.log('💥 Burst activated!');
+        console.log(`💥 Burst released! Charge: ${(chargeLevel * 100).toFixed(0)}% | Scale: ${arrowScale.toFixed(2)} | Damage: ${arrowDamage.toFixed(0)}`);
         return true;
     }
 
     /**
-     * Shield ability (R) - Temporary damage immunity
+     * Shield ability (R) - Temporary damage immunity - ENHANCED VERSION
      */
     shield(time) {
         if (!this.canUseAbility('shield', time)) return false;
@@ -157,6 +271,12 @@ export default class AbilitySystem {
         this.shieldEndTime = time + this.abilities.shield.duration;
         player.isInvulnerable = true;
 
+        // CRITICAL: Set invulnerabilityEndTime to prevent MainScene from clearing it
+        player.invulnerabilityEndTime = time + this.abilities.shield.duration + 100;
+
+        // Create activation effect
+        this.createShieldActivationEffect(player.x, player.y);
+
         // Create shield visual
         this.createShieldGraphic();
 
@@ -166,14 +286,15 @@ export default class AbilitySystem {
         });
 
         this.abilities.shield.lastUsed = time;
-        console.log('🛡️ Shield activated!');
+        console.log('🛡️ Shield activated! isInvulnerable:', player.isInvulnerable, 'endTime:', player.invulnerabilityEndTime);
         return true;
     }
 
     /**
-     * Chain Lightning ability (X) - Lightning that jumps between enemies
+     * Chain Lightning ability (X) - Lightning that jumps between enemies and huts
      */
     chainLightning(time) {
+        console.log('⚡ chainLightning called');
         if (!this.canUseAbility('chainLightning', time)) return false;
 
         const player = this.scene.player;
@@ -181,37 +302,45 @@ export default class AbilitySystem {
         const maxRange = 400;
         const damage = 30;
 
-        // Find nearest enemy
+        // Gather all possible targets (enemies + goblin huts)
         const enemies = this.scene.enemies.getChildren()
             .filter(e => !e.isDying && e.active);
 
-        if (enemies.length === 0) {
-            console.log('⚡ No enemies to target!');
+        const huts = this.scene.goblinHuts.getChildren()
+            .filter(h => h.active && !h.isDestroyed);
+
+        // Combine all targets
+        const allTargets = [...enemies, ...huts];
+
+        console.log(`⚡ Found ${enemies.length} enemies and ${huts.length} huts (${allTargets.length} total targets)`);
+
+        if (allTargets.length === 0) {
+            console.log('⚡ No targets available!');
             return false; // Don't consume cooldown if no targets
         }
 
-        // Find initial target
+        // Find initial target (closest to player)
         let currentTarget = null;
         let minDist = Infinity;
 
-        for (const enemy of enemies) {
+        for (const target of allTargets) {
             const dist = Phaser.Math.Distance.Between(
                 player.x, player.y,
-                enemy.x, enemy.y
+                target.x, target.y
             );
             if (dist < minDist && dist < maxRange) {
                 minDist = dist;
-                currentTarget = enemy;
+                currentTarget = target;
             }
         }
 
         if (!currentTarget) {
-            console.log('⚡ No enemies in range!');
+            console.log('⚡ No targets in range!');
             return false; // Don't consume cooldown
         }
 
-        // Chain lightning through enemies
-        const hitEnemies = new Set();
+        // Chain lightning through all targets
+        const hitTargets = new Set();
         let chainCount = 0;
         let lastTarget = { x: player.x, y: player.y };
 
@@ -219,9 +348,9 @@ export default class AbilitySystem {
             // Draw lightning bolt
             this.drawLightning(lastTarget.x, lastTarget.y, currentTarget.x, currentTarget.y);
 
-            // Damage enemy
+            // Damage target (works for both enemies and huts)
             currentTarget.takeDamage(damage);
-            hitEnemies.add(currentTarget);
+            hitTargets.add(currentTarget);
             chainCount++;
 
             // Find next target
@@ -229,23 +358,23 @@ export default class AbilitySystem {
             currentTarget = null;
             minDist = Infinity;
 
-            for (const enemy of enemies) {
-                if (hitEnemies.has(enemy)) continue; // Skip already hit
+            for (const target of allTargets) {
+                if (hitTargets.has(target)) continue; // Skip already hit
 
                 const dist = Phaser.Math.Distance.Between(
                     lastTarget.x, lastTarget.y,
-                    enemy.x, enemy.y
+                    target.x, target.y
                 );
 
                 if (dist < minDist && dist < maxRange) {
                     minDist = dist;
-                    currentTarget = enemy;
+                    currentTarget = target;
                 }
             }
         }
 
         this.abilities.chainLightning.lastUsed = time;
-        console.log(`⚡ Chain Lightning hit ${chainCount} enemies!`);
+        console.log(`⚡ Chain Lightning hit ${chainCount} targets!`);
         return true;
     }
 
@@ -253,21 +382,90 @@ export default class AbilitySystem {
      * Update method - called every frame
      */
     update(time) {
-        // Update shield visual position
+        // Update shield visual position and effects
         if (this.shieldActive && this.shieldGraphic) {
             this.shieldGraphic.x = this.scene.player.x;
             this.shieldGraphic.y = this.scene.player.y;
+
+            // Calculate remaining time percentage
+            const timeRemaining = this.shieldEndTime - time;
+            const timePercent = timeRemaining / this.abilities.shield.duration;
+
+            // Dynamic color based on remaining time
+            let shieldColor, glowColor, intensity;
+            if (timePercent > 0.7) {
+                // 100-70%: Bright blue
+                shieldColor = 0x00ffff;
+                glowColor = 0x00ccff;
+                intensity = 1.0;
+            } else if (timePercent > 0.4) {
+                // 70-40%: Cyan
+                shieldColor = 0x00ffaa;
+                glowColor = 0x00ddaa;
+                intensity = 1.2;
+            } else if (timePercent > 0.2) {
+                // 40-20%: Yellow warning
+                shieldColor = 0xffff00;
+                glowColor = 0xffcc00;
+                intensity = 1.5;
+            } else {
+                // 20-0%: Red critical with flash
+                const flash = Math.sin(time / 100) > 0 ? 1 : 0.5;
+                shieldColor = 0xff0000;
+                glowColor = 0xff3333;
+                intensity = 2.0 * flash;
+            }
+
+            // Update player tint color based on shield status
+            const player = this.scene.player;
+            if (player) {
+                player.setTint(shieldColor);
+            }
+        }
+
+        // Update berserker aura position
+        if (this.berserkerActive && this.berserkerGraphic) {
+            this.berserkerGraphic.x = this.scene.player.x;
+            this.berserkerGraphic.y = this.scene.player.y;
+        }
+
+        // Update burst charging
+        if (this.isChargingBurst) {
+            const player = this.scene.player;
+            const chargeTime = time - this.burstChargeStartTime;
+            const chargeLevel = Math.min(chargeTime / 3000, 1); // 0-1 over 3 seconds
+            this.burstChargeLevel = chargeLevel;
+
+            // Reduce player speed progressively (300 -> 0 over 3 seconds)
+            const speedMultiplier = 1 - chargeLevel;
+            player.maxSpeed = this.originalPlayerSpeed * speedMultiplier;
+
+            // Also slow down current velocity
+            if (player.body) {
+                player.body.velocity.x *= speedMultiplier;
+                player.body.velocity.y *= speedMultiplier;
+            }
+
+            // Update visual charging effect
+            this.updateBurstChargeVisual(player.x, player.y, chargeLevel);
         }
     }
 
     /**
      * Check if ability can be used
+     * During berserker mode, cooldowns recover 4x faster (except berserker itself)
      */
     canUseAbility(abilityName, time) {
         const ability = this.abilities[abilityName];
         if (!ability.enabled) return false;
 
-        const timeSinceUse = time - ability.lastUsed;
+        let timeSinceUse = time - ability.lastUsed;
+
+        // Berserker mode: cooldowns recover 4x faster (75% cooldown reduction)
+        if (this.berserkerActive && abilityName !== 'berserker') {
+            timeSinceUse *= 4; // Effectively cuts cooldown time to 25%
+        }
+
         if (timeSinceUse < ability.cooldown) {
             const remaining = Math.ceil((ability.cooldown - timeSinceUse) / 1000);
             console.log(`⏱️ ${abilityName} on cooldown: ${remaining}s remaining`);
@@ -279,11 +477,17 @@ export default class AbilitySystem {
 
     /**
      * Get cooldown percentage (0-1) for UI
+     * During berserker mode, cooldowns are 4x faster (75% cooldown reduction)
      */
     getCooldownPercent(abilityName) {
         const ability = this.abilities[abilityName];
         const time = this.scene.time.now;
-        const timeSinceUse = time - ability.lastUsed;
+        let timeSinceUse = time - ability.lastUsed;
+
+        // Berserker mode: cooldowns recover 4x faster (75% cooldown reduction)
+        if (this.berserkerActive && abilityName !== 'berserker') {
+            timeSinceUse *= 4; // Effectively cuts cooldown time to 25%
+        }
 
         if (timeSinceUse >= ability.cooldown) return 1; // Ready
 
@@ -291,44 +495,264 @@ export default class AbilitySystem {
     }
 
     /**
-     * Create dash trail effect
+     * Create dash trail effect - ENHANCED VERSION
      */
     createDashTrail(x1, y1, x2, y2) {
         const graphics = this.scene.add.graphics();
-        graphics.lineStyle(4, 0x00ffff, 0.6);
+
+        // Draw multiple trail layers for glow effect
+        // Outer glow (wide, transparent)
+        graphics.lineStyle(20, 0x00ffff, 0.15);
+        graphics.lineBetween(x1, y1, x2, y2);
+
+        // Middle glow
+        graphics.lineStyle(12, 0x00ffff, 0.3);
+        graphics.lineBetween(x1, y1, x2, y2);
+
+        // Inner trail (bright)
+        graphics.lineStyle(6, 0x00ffff, 0.6);
+        graphics.lineBetween(x1, y1, x2, y2);
+
+        // Core (brightest)
+        graphics.lineStyle(3, 0xffffff, 0.8);
         graphics.lineBetween(x1, y1, x2, y2);
 
         // Fade out trail
         this.scene.tweens.add({
             targets: graphics,
             alpha: 0,
-            duration: 300,
+            duration: 400,
+            ease: 'Power2',
             onComplete: () => graphics.destroy()
         });
     }
 
     /**
-     * Create shield graphic
+     * Create dash start effect - Burst of energy
+     */
+    createDashStartEffect(x, y) {
+        // Expanding cyan ring
+        const ring = this.scene.add.graphics();
+        ring.lineStyle(3, 0x00ffff, 0.8);
+        ring.strokeCircle(x, y, 20);
+
+        this.scene.tweens.add({
+            targets: ring,
+            scaleX: 2,
+            scaleY: 2,
+            alpha: 0,
+            duration: 300,
+            ease: 'Power2',
+            onComplete: () => ring.destroy()
+        });
+
+        // Particle burst
+        const particleCount = 12;
+        for (let i = 0; i < particleCount; i++) {
+            const angle = (Math.PI * 2 * i) / particleCount;
+            const particle = this.scene.add.circle(x, y, 4, 0x00ffff, 0.8);
+
+            const distance = Phaser.Math.Between(30, 50);
+            this.scene.tweens.add({
+                targets: particle,
+                x: x + Math.cos(angle) * distance,
+                y: y + Math.sin(angle) * distance,
+                alpha: 0,
+                scale: 0.2,
+                duration: 300,
+                ease: 'Power2',
+                onComplete: () => particle.destroy()
+            });
+        }
+    }
+
+    /**
+     * Create afterimage trail - Ghost images of the player
+     */
+    createAfterimageTrail(player, targetX, targetY, duration) {
+        const afterimageCount = 8;
+        const interval = duration / afterimageCount;
+
+        for (let i = 0; i < afterimageCount; i++) {
+            this.scene.time.delayedCall(i * interval, () => {
+                // Create a sprite copy of the player
+                const afterimage = this.scene.add.sprite(player.x, player.y, player.texture.key);
+                afterimage.setFrame(player.frame.name);
+                afterimage.setFlipX(player.flipX);
+                afterimage.setScale(player.scaleX, player.scaleY);
+                afterimage.setTint(0x00ffff);
+                afterimage.setAlpha(0.5);
+
+                // Fade out
+                this.scene.tweens.add({
+                    targets: afterimage,
+                    alpha: 0,
+                    scale: afterimage.scaleX * 0.8,
+                    duration: 300,
+                    ease: 'Power2',
+                    onComplete: () => afterimage.destroy()
+                });
+            });
+        }
+    }
+
+    /**
+     * Create speed lines effect
+     */
+    createSpeedLines(x1, y1, x2, y2, duration) {
+        const lineCount = 20;
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+
+        for (let i = 0; i < lineCount; i++) {
+            this.scene.time.delayedCall(i * (duration / lineCount), () => {
+                const graphics = this.scene.add.graphics();
+
+                // Random position around the path
+                const t = Math.random();
+                const centerX = x1 + (x2 - x1) * t;
+                const centerY = y1 + (y2 - y1) * t;
+
+                // Offset perpendicular to movement
+                const perpAngle = angle + Math.PI / 2;
+                const offset = (Math.random() - 0.5) * 100;
+                const startX = centerX + Math.cos(perpAngle) * offset;
+                const startY = centerY + Math.sin(perpAngle) * offset;
+
+                // Speed line in movement direction
+                const lineLength = Phaser.Math.Between(20, 50);
+                const endX = startX - Math.cos(angle) * lineLength;
+                const endY = startY - Math.sin(angle) * lineLength;
+
+                graphics.lineStyle(2, 0x00ffff, 0.6);
+                graphics.lineBetween(startX, startY, endX, endY);
+
+                // Fade out
+                this.scene.tweens.add({
+                    targets: graphics,
+                    alpha: 0,
+                    duration: 200,
+                    onComplete: () => graphics.destroy()
+                });
+            });
+        }
+    }
+
+    /**
+     * Create dash end effect - Impact landing
+     */
+    createDashEndEffect(x, y) {
+        // Impact flash
+        const flash = this.scene.add.circle(x, y, 15, 0xffffff, 0.8);
+
+        this.scene.tweens.add({
+            targets: flash,
+            scale: 2.5,
+            alpha: 0,
+            duration: 300,
+            ease: 'Power2',
+            onComplete: () => flash.destroy()
+        });
+
+        // Impact ring
+        const ring = this.scene.add.graphics();
+        ring.lineStyle(3, 0x00ffff, 0.7);
+        ring.strokeCircle(x, y, 20);
+
+        this.scene.tweens.add({
+            targets: ring,
+            scaleX: 2,
+            scaleY: 2,
+            alpha: 0,
+            duration: 400,
+            ease: 'Power2',
+            onComplete: () => ring.destroy()
+        });
+
+        // Ground impact particles
+        const impactParticleCount = 16;
+        for (let i = 0; i < impactParticleCount; i++) {
+            const angle = (Math.PI * 2 * i) / impactParticleCount;
+            const particle = this.scene.add.circle(x, y, Phaser.Math.Between(2, 4), 0x00ffff);
+
+            const distance = Phaser.Math.Between(20, 40);
+            this.scene.tweens.add({
+                targets: particle,
+                x: x + Math.cos(angle) * distance,
+                y: y + Math.sin(angle) * distance,
+                alpha: 0,
+                scale: 0,
+                duration: Phaser.Math.Between(250, 400),
+                ease: 'Power2',
+                onComplete: () => particle.destroy()
+            });
+        }
+
+        // Slight camera shake
+        this.scene.cameras.main.shake(100, 0.003);
+    }
+
+    /**
+     * Create shield graphic - ENHANCED VERSION with hexagonal pattern
      */
     createShieldGraphic() {
         if (this.shieldGraphic) {
             this.shieldGraphic.destroy();
         }
 
-        this.shieldGraphic = this.scene.add.graphics();
-        this.shieldGraphic.lineStyle(3, 0x00ffff, 0.8);
-        this.shieldGraphic.strokeCircle(0, 0, 50);
+        const player = this.scene.player;
 
-        this.shieldGraphic.x = this.scene.player.x;
-        this.shieldGraphic.y = this.scene.player.y;
+        // Container for shield graphics (simple like berserker)
+        this.shieldGraphic = this.scene.add.container(player.x, player.y);
+        this.shieldGraphic.setDepth(player.depth - 1); // Behind player
 
-        // Pulsing animation
+        // Apply blue tint to player sprite
+        player.setTint(0x00ccff);
+
+        // Only sparkle particles (no glow, no hexagon, no rings)
+        this.createShieldSparkles();
+
+        // Initialize particles array
+        this.shieldParticles = [];
+    }
+
+    /**
+     * Spawn orbital particles around shield
+     */
+    spawnShieldOrbitalParticle(color) {
+        const player = this.scene.player;
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 35 + Math.random() * 10;
+
+        const particle = this.scene.add.circle(
+            player.x + Math.cos(angle) * radius,
+            player.y + Math.sin(angle) * radius,
+            3,
+            color
+        );
+        particle.setAlpha(0.8);
+        particle.setDepth(60);
+
+        // Orbit animation
         this.scene.tweens.add({
-            targets: this.shieldGraphic,
-            alpha: 0.3,
-            duration: 500,
-            yoyo: true,
-            repeat: -1
+            targets: particle,
+            angle: angle + Math.PI * 2,
+            duration: 1000,
+            ease: 'Linear',
+            onUpdate: () => {
+                particle.x = player.x + Math.cos(particle.angle) * radius;
+                particle.y = player.y + Math.sin(particle.angle) * radius;
+            },
+            onComplete: () => {
+                particle.destroy();
+            }
+        });
+
+        // Fade out
+        this.scene.tweens.add({
+            targets: particle,
+            alpha: 0,
+            duration: 800,
+            delay: 200
         });
     }
 
@@ -337,7 +761,9 @@ export default class AbilitySystem {
      */
     deactivateShield() {
         this.shieldActive = false;
-        this.scene.player.isInvulnerable = false;
+
+        // Clear player tint
+        this.scene.player.clearTint();
 
         if (this.shieldGraphic) {
             this.scene.tweens.add({
@@ -351,40 +777,885 @@ export default class AbilitySystem {
             });
         }
 
+        // Only remove invulnerability if shield was the one that set it
+        // Wait a bit to avoid instant damage after shield ends
+        this.scene.time.delayedCall(100, () => {
+            this.scene.player.isInvulnerable = false;
+        });
+
         console.log('🛡️ Shield deactivated');
     }
 
     /**
-     * Draw lightning bolt effect
+     * Draw lightning bolt effect - ENHANCED VERSION
      */
     drawLightning(x1, y1, x2, y2) {
-        const graphics = this.scene.add.graphics();
-        graphics.lineStyle(3, 0xffff00, 1);
+        // Screen shake for impact
+        this.scene.cameras.main.shake(200, 0.005);
 
-        // Jagged lightning effect
-        const segments = 5;
+        // Main lightning bolt with glow
+        this.drawMainLightningBolt(x1, y1, x2, y2);
+
+        // Add branching bolts for more drama
+        this.drawBranchingBolts(x1, y1, x2, y2);
+
+        // Impact explosion at target
+        this.createLightningImpact(x2, y2);
+
+        // Electric sparks along the path
+        this.createElectricSparks(x1, y1, x2, y2);
+
+        // Screen flash effect
+        this.createLightningFlash();
+    }
+
+    /**
+     * Draw main lightning bolt with electric glow
+     */
+    drawMainLightningBolt(x1, y1, x2, y2) {
+        const graphics = this.scene.add.graphics();
+
+        // Generate jagged lightning path with more segments for smoother look
+        const segments = 8;
         const points = [{ x: x1, y: y1 }];
 
         for (let i = 1; i < segments; i++) {
             const t = i / segments;
-            const x = x1 + (x2 - x1) * t + (Math.random() - 0.5) * 40;
-            const y = y1 + (y2 - y1) * t + (Math.random() - 0.5) * 40;
+            const x = x1 + (x2 - x1) * t + (Math.random() - 0.5) * 50;
+            const y = y1 + (y2 - y1) * t + (Math.random() - 0.5) * 50;
             points.push({ x, y });
         }
-
         points.push({ x: x2, y: y2 });
 
-        // Draw segments
+        // Draw outer glow (cyan/white)
+        graphics.lineStyle(12, 0xccffff, 0.3);
         for (let i = 0; i < points.length - 1; i++) {
             graphics.lineBetween(points[i].x, points[i].y, points[i + 1].x, points[i + 1].y);
         }
 
-        // Flash and fade
+        // Draw middle glow (bright cyan)
+        graphics.lineStyle(6, 0x00ffff, 0.6);
+        for (let i = 0; i < points.length - 1; i++) {
+            graphics.lineBetween(points[i].x, points[i].y, points[i + 1].x, points[i + 1].y);
+        }
+
+        // Draw core (bright white-yellow)
+        graphics.lineStyle(2, 0xffffff, 1);
+        for (let i = 0; i < points.length - 1; i++) {
+            graphics.lineBetween(points[i].x, points[i].y, points[i + 1].x, points[i + 1].y);
+        }
+
+        // Animate and fade
         this.scene.tweens.add({
             targets: graphics,
             alpha: 0,
-            duration: 150,
+            duration: 200,
+            ease: 'Power2',
             onComplete: () => graphics.destroy()
         });
+    }
+
+    /**
+     * Draw branching lightning bolts
+     */
+    drawBranchingBolts(x1, y1, x2, y2) {
+        const branchCount = Phaser.Math.Between(2, 4);
+
+        for (let b = 0; b < branchCount; b++) {
+            const graphics = this.scene.add.graphics();
+
+            // Pick a random point along the main bolt to branch from
+            const t = Math.random() * 0.7 + 0.15; // Between 15% and 85%
+            const branchStartX = x1 + (x2 - x1) * t;
+            const branchStartY = y1 + (y2 - y1) * t;
+
+            // Random branch direction
+            const angle = Math.random() * Math.PI * 2;
+            const length = Phaser.Math.Between(40, 100);
+            const branchEndX = branchStartX + Math.cos(angle) * length;
+            const branchEndY = branchStartY + Math.sin(angle) * length;
+
+            // Generate branch path
+            const segments = 3;
+            const points = [{ x: branchStartX, y: branchStartY }];
+
+            for (let i = 1; i < segments; i++) {
+                const t2 = i / segments;
+                const x = branchStartX + (branchEndX - branchStartX) * t2 + (Math.random() - 0.5) * 20;
+                const y = branchStartY + (branchEndY - branchStartY) * t2 + (Math.random() - 0.5) * 20;
+                points.push({ x, y });
+            }
+            points.push({ x: branchEndX, y: branchEndY });
+
+            // Draw branch glow
+            graphics.lineStyle(6, 0x66ffff, 0.4);
+            for (let i = 0; i < points.length - 1; i++) {
+                graphics.lineBetween(points[i].x, points[i].y, points[i + 1].x, points[i + 1].y);
+            }
+
+            // Draw branch core
+            graphics.lineStyle(1.5, 0xffffff, 0.8);
+            for (let i = 0; i < points.length - 1; i++) {
+                graphics.lineBetween(points[i].x, points[i].y, points[i + 1].x, points[i + 1].y);
+            }
+
+            // Fade out with slight delay
+            this.scene.tweens.add({
+                targets: graphics,
+                alpha: 0,
+                duration: 150,
+                delay: b * 20,
+                onComplete: () => graphics.destroy()
+            });
+        }
+    }
+
+    /**
+     * Create electric spark particles along the lightning path
+     */
+    createElectricSparks(x1, y1, x2, y2) {
+        const sparkCount = 15;
+
+        for (let i = 0; i < sparkCount; i++) {
+            const t = Math.random();
+            const x = x1 + (x2 - x1) * t + (Math.random() - 0.5) * 30;
+            const y = y1 + (y2 - y1) * t + (Math.random() - 0.5) * 30;
+
+            const spark = this.scene.add.circle(x, y, Phaser.Math.Between(2, 4), 0xffffff);
+
+            // Random velocity
+            const vx = (Math.random() - 0.5) * 100;
+            const vy = (Math.random() - 0.5) * 100;
+
+            this.scene.tweens.add({
+                targets: spark,
+                x: x + vx,
+                y: y + vy,
+                alpha: 0,
+                scale: 0,
+                duration: Phaser.Math.Between(150, 300),
+                ease: 'Power2',
+                onComplete: () => spark.destroy()
+            });
+        }
+    }
+
+    /**
+     * Create impact explosion at target
+     */
+    createLightningImpact(x, y) {
+        // Main impact flash
+        const impact = this.scene.add.circle(x, y, 20, 0xffffff, 0.9);
+
+        this.scene.tweens.add({
+            targets: impact,
+            scale: 3,
+            alpha: 0,
+            duration: 300,
+            ease: 'Power2',
+            onComplete: () => impact.destroy()
+        });
+
+        // Electric ring
+        const ring = this.scene.add.graphics();
+        ring.lineStyle(3, 0x00ffff, 0.8);
+        ring.strokeCircle(x, y, 15);
+
+        this.scene.tweens.add({
+            targets: ring,
+            scaleX: 2.5,
+            scaleY: 2.5,
+            alpha: 0,
+            duration: 400,
+            ease: 'Power2',
+            onComplete: () => ring.destroy()
+        });
+
+        // Impact sparks
+        const impactSparkCount = 20;
+        for (let i = 0; i < impactSparkCount; i++) {
+            const angle = (Math.PI * 2 * i) / impactSparkCount;
+            const distance = Phaser.Math.Between(20, 60);
+            const spark = this.scene.add.circle(x, y, Phaser.Math.Between(2, 5), 0x00ffff);
+
+            this.scene.tweens.add({
+                targets: spark,
+                x: x + Math.cos(angle) * distance,
+                y: y + Math.sin(angle) * distance,
+                alpha: 0,
+                scale: 0,
+                duration: Phaser.Math.Between(200, 400),
+                ease: 'Power3',
+                onComplete: () => spark.destroy()
+            });
+        }
+    }
+
+    /**
+     * Create screen flash effect
+     */
+    createLightningFlash() {
+        const flash = this.scene.add.rectangle(
+            this.scene.cameras.main.centerX,
+            this.scene.cameras.main.centerY,
+            this.scene.cameras.main.width,
+            this.scene.cameras.main.height,
+            0xffffff,
+            0.3
+        );
+        flash.setScrollFactor(0);
+        flash.setDepth(1000);
+
+        this.scene.tweens.add({
+            targets: flash,
+            alpha: 0,
+            duration: 100,
+            onComplete: () => flash.destroy()
+        });
+    }
+
+    /**
+     * BURST EFFECTS
+     */
+
+    /**
+     * Create burst charging effect
+     */
+    createBurstChargingEffect(x, y) {
+        // Pulsing rings during charge
+        for (let i = 0; i < 3; i++) {
+            this.scene.time.delayedCall(i * 70, () => {
+                const ring = this.scene.add.graphics();
+                ring.lineStyle(2, 0xffff00, 0.6);
+                ring.strokeCircle(x, y, 10);
+
+                this.scene.tweens.add({
+                    targets: ring,
+                    scaleX: 3,
+                    scaleY: 3,
+                    alpha: 0,
+                    duration: 200,
+                    ease: 'Power2',
+                    onComplete: () => ring.destroy()
+                });
+            });
+        }
+
+        // Energy particles gathering
+        for (let i = 0; i < 16; i++) {
+            const angle = (Math.PI * 2 * i) / 16;
+            const distance = 80;
+            const particle = this.scene.add.circle(
+                x + Math.cos(angle) * distance,
+                y + Math.sin(angle) * distance,
+                3,
+                0xffff00
+            );
+
+            this.scene.tweens.add({
+                targets: particle,
+                x: x,
+                y: y,
+                alpha: 0,
+                duration: 200,
+                ease: 'Power2',
+                onComplete: () => particle.destroy()
+            });
+        }
+    }
+
+    /**
+     * Create burst explosion at center
+     */
+    createBurstExplosion(x, y) {
+        // Main explosion flash
+        const explosion = this.scene.add.circle(x, y, 20, 0xffffff, 0.9);
+
+        this.scene.tweens.add({
+            targets: explosion,
+            scale: 4,
+            alpha: 0,
+            duration: 400,
+            ease: 'Power3',
+            onComplete: () => explosion.destroy()
+        });
+
+        // Multiple expanding rings
+        const colors = [0xffff00, 0xff9900, 0xff0000];
+        for (let i = 0; i < 3; i++) {
+            const ring = this.scene.add.graphics();
+            ring.lineStyle(3, colors[i], 0.7);
+            ring.strokeCircle(x, y, 15 + i * 5);
+
+            this.scene.tweens.add({
+                targets: ring,
+                scaleX: 4,
+                scaleY: 4,
+                alpha: 0,
+                duration: 500,
+                delay: i * 50,
+                ease: 'Power2',
+                onComplete: () => ring.destroy()
+            });
+        }
+
+        // Explosion particles
+        for (let i = 0; i < 30; i++) {
+            const angle = (Math.PI * 2 * i) / 30;
+            const particle = this.scene.add.circle(x, y, Phaser.Math.Between(3, 6), 0xffff00);
+
+            const distance = Phaser.Math.Between(40, 80);
+            this.scene.tweens.add({
+                targets: particle,
+                x: x + Math.cos(angle) * distance,
+                y: y + Math.sin(angle) * distance,
+                alpha: 0,
+                scale: 0,
+                duration: Phaser.Math.Between(300, 500),
+                ease: 'Power3',
+                onComplete: () => particle.destroy()
+            });
+        }
+    }
+
+    /**
+     * Create burst screen flash
+     */
+    createBurstFlash() {
+        const flash = this.scene.add.rectangle(
+            this.scene.cameras.main.centerX,
+            this.scene.cameras.main.centerY,
+            this.scene.cameras.main.width,
+            this.scene.cameras.main.height,
+            0xffff00,
+            0.4
+        );
+        flash.setScrollFactor(0);
+        flash.setDepth(1000);
+
+        this.scene.tweens.add({
+            targets: flash,
+            alpha: 0,
+            duration: 150,
+            onComplete: () => flash.destroy()
+        });
+    }
+
+    /**
+     * Create trail for projectiles
+     */
+    createProjectileTrail(projectile, angle, color) {
+        // Create periodic trail particles
+        const trailInterval = this.scene.time.addEvent({
+            delay: 30,
+            callback: () => {
+                if (!projectile.active) {
+                    trailInterval.remove();
+                    return;
+                }
+
+                const trail = this.scene.add.circle(projectile.x, projectile.y, 3, color, 0.6);
+
+                this.scene.tweens.add({
+                    targets: trail,
+                    alpha: 0,
+                    scale: 0.2,
+                    duration: 200,
+                    ease: 'Power2',
+                    onComplete: () => trail.destroy()
+                });
+            },
+            loop: true
+        });
+    }
+
+    /**
+     * SHIELD EFFECTS
+     */
+
+    /**
+     * Create shield activation effect
+     */
+    createShieldActivationEffect(x, y) {
+        // Expanding activation wave
+        const wave = this.scene.add.graphics();
+        wave.lineStyle(4, 0x00ffff, 0.8);
+        wave.strokeCircle(x, y, 10);
+
+        this.scene.tweens.add({
+            targets: wave,
+            scaleX: 5,
+            scaleY: 5,
+            alpha: 0,
+            duration: 500,
+            ease: 'Power2',
+            onComplete: () => wave.destroy()
+        });
+
+        // Activation flash
+        const flash = this.scene.add.circle(x, y, 15, 0xffffff, 0.8);
+
+        this.scene.tweens.add({
+            targets: flash,
+            scale: 3,
+            alpha: 0,
+            duration: 300,
+            ease: 'Power2',
+            onComplete: () => flash.destroy()
+        });
+
+        // Particle burst
+        for (let i = 0; i < 20; i++) {
+            const angle = (Math.PI * 2 * i) / 20;
+            const particle = this.scene.add.circle(x, y, 4, 0x00ffff);
+
+            const distance = Phaser.Math.Between(30, 60);
+            this.scene.tweens.add({
+                targets: particle,
+                x: x + Math.cos(angle) * distance,
+                y: y + Math.sin(angle) * distance,
+                alpha: 0,
+                scale: 0.2,
+                duration: 400,
+                ease: 'Power2',
+                onComplete: () => particle.destroy()
+            });
+        }
+    }
+
+    /**
+     * Create sparkle particles around shield
+     */
+    createShieldSparkles() {
+        // Continuously spawn sparkles while shield is active
+        const sparkleEvent = this.scene.time.addEvent({
+            delay: 150,
+            callback: () => {
+                if (!this.shieldActive) {
+                    sparkleEvent.remove();
+                    return;
+                }
+
+                const player = this.scene.player;
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Phaser.Math.Between(25, 35);
+                const x = player.x + Math.cos(angle) * distance;
+                const y = player.y + Math.sin(angle) * distance;
+
+                const sparkle = this.scene.add.circle(x, y, 2, 0xffffff, 0.8);
+
+                this.scene.tweens.add({
+                    targets: sparkle,
+                    alpha: 0,
+                    scale: 0,
+                    duration: 300,
+                    ease: 'Power2',
+                    onComplete: () => sparkle.destroy()
+                });
+            },
+            loop: true
+        });
+    }
+
+    /**
+     * Update burst charge visual effect - ENHANCED CIRCLE
+     */
+    updateBurstChargeVisual(x, y, chargeLevel) {
+        // Destroy previous graphic
+        if (this.burstChargeGraphic) {
+            this.burstChargeGraphic.destroy();
+        }
+
+        // Create charging circle that grows with charge level
+        this.burstChargeGraphic = this.scene.add.graphics();
+
+        // Circle grows from 30 to 80 pixels
+        const radius = 30 + (chargeLevel * 50);
+        const alpha = 0.4 + (chargeLevel * 0.4); // 0.4 to 0.8
+
+        // Outer glow ring (wide, transparent)
+        this.burstChargeGraphic.lineStyle(8, 0xffff00, alpha * 0.3);
+        this.burstChargeGraphic.strokeCircle(x, y, radius);
+
+        // Middle ring (medium)
+        this.burstChargeGraphic.lineStyle(5, 0xffff00, alpha * 0.6);
+        this.burstChargeGraphic.strokeCircle(x, y, radius * 0.85);
+
+        // Inner bright ring
+        this.burstChargeGraphic.lineStyle(3, 0xffffff, alpha * 0.8);
+        this.burstChargeGraphic.strokeCircle(x, y, radius * 0.7);
+
+        // Inner glow fill
+        this.burstChargeGraphic.fillStyle(0xffff00, alpha * 0.2);
+        this.burstChargeGraphic.fillCircle(x, y, radius * 0.6);
+
+        // Spawn energy particles around the edge
+        if (Math.random() < 0.3 + (chargeLevel * 0.5)) { // More particles as charge increases
+            const angle = Math.random() * Math.PI * 2;
+            const distance = radius;
+            const particle = this.scene.add.circle(
+                x + Math.cos(angle) * distance,
+                y + Math.sin(angle) * distance,
+                3 + (chargeLevel * 3),
+                0xffff00,
+                0.9
+            );
+
+            this.scene.tweens.add({
+                targets: particle,
+                alpha: 0,
+                scale: 0.2,
+                duration: 300,
+                ease: 'Power2',
+                onComplete: () => particle.destroy()
+            });
+        }
+
+        // Screen shake increases with charge (only when >50% charged)
+        if (chargeLevel > 0.5 && Math.random() < 0.08) {
+            this.scene.cameras.main.shake(40, 0.002 * chargeLevel);
+        }
+    }
+
+    /**
+     * BERSERKER MODE ABILITY (Z)
+     * Increases damage, attack speed, and movement speed for limited duration
+     */
+    berserker(time) {
+        if (!this.canUseAbility('berserker', time)) return false;
+
+        const player = this.scene.player;
+
+        // Activate berserker mode
+        this.berserkerActive = true;
+        this.berserkerEndTime = time + this.abilities.berserker.duration;
+
+        // Store original values
+        this.originalSpeed = player.speed;
+        this.originalFireRate = this.scene.autoFireSystem ? this.scene.autoFireSystem.fireRate : 500;
+
+        // Apply buffs
+        player.speed = this.originalSpeed * 1.5; // +50% movement speed
+        player.damageMultiplier = 2.0; // +100% damage (2x damage)
+
+        // Increase fire rate (reduce delay between shots)
+        if (this.scene.autoFireSystem) {
+            this.scene.autoFireSystem.fireRate = this.originalFireRate * 0.33; // Shoot 3x faster
+        }
+
+        // Create activation effect
+        this.createBerserkerActivationEffect(player.x, player.y);
+
+        // Create berserker aura
+        this.createBerserkerAura();
+
+        // Apply red tint to player
+        player.setTint(0xff0000);
+
+        // Schedule berserker end
+        this.scene.time.delayedCall(this.abilities.berserker.duration, () => {
+            this.deactivateBerserker();
+        });
+
+        this.abilities.berserker.lastUsed = time;
+        console.log('🔥 Berserker Mode activated! Damage: 2x, Speed: +50%, Fire Rate: 3x, Cooldowns: -75% (4x faster)');
+        return true;
+    }
+
+    /**
+     * Summon ability (F) - Spawn 5 mini archers that follow and fight
+     */
+    summon(time) {
+        if (!this.canUseAbility('summon', time)) return false;
+
+        const player = this.scene.player;
+
+        // Import MiniArcher class
+        import('../entities/MiniArcher.js').then((module) => {
+            const MiniArcher = module.default;
+
+            // Spawn 5 mini archers in a circle around player
+            const archerCount = 5;
+            const spawnRadius = 60; // Distance from player
+            const angleStep = (Math.PI * 2) / archerCount;
+
+            for (let i = 0; i < archerCount; i++) {
+                const angle = angleStep * i;
+                const spawnX = player.x + Math.cos(angle) * spawnRadius;
+                const spawnY = player.y + Math.sin(angle) * spawnRadius;
+
+                // Calculate follow offset (they'll maintain this relative position)
+                const offsetX = Math.cos(angle) * 50;
+                const offsetY = Math.sin(angle) * 50;
+
+                // Create mini archer
+                const miniArcher = new MiniArcher(this.scene, spawnX, spawnY, offsetX, offsetY);
+
+                // Store in scene for updates (we'll create the group if it doesn't exist)
+                if (!this.scene.miniArchers) {
+                    this.scene.miniArchers = [];
+                }
+                this.scene.miniArchers.push(miniArcher);
+            }
+
+            // Create activation effect
+            this.createSummonActivationEffect(player.x, player.y);
+
+            console.log('🏹 Summoned 5 mini archers!');
+        });
+
+        this.abilities.summon.lastUsed = time;
+        return true;
+    }
+
+    /**
+     * Deactivate berserker mode
+     */
+    deactivateBerserker() {
+        this.berserkerActive = false;
+
+        const player = this.scene.player;
+
+        // Restore original values
+        if (this.originalSpeed !== null) {
+            player.speed = this.originalSpeed;
+        }
+        player.damageMultiplier = 1.0; // Reset damage multiplier
+
+        // Restore fire rate
+        if (this.scene.autoFireSystem && this.originalFireRate !== null) {
+            this.scene.autoFireSystem.fireRate = this.originalFireRate;
+        }
+
+        // Clear player tint
+        player.clearTint();
+
+        // Destroy berserker aura
+        if (this.berserkerGraphic) {
+            this.scene.tweens.add({
+                targets: this.berserkerGraphic,
+                alpha: 0,
+                duration: 300,
+                onComplete: () => {
+                    if (this.berserkerGraphic) {
+                        this.berserkerGraphic.destroy();
+                        this.berserkerGraphic = null;
+                    }
+                }
+            });
+        }
+
+        console.log('🔥 Berserker Mode deactivated');
+    }
+
+    /**
+     * BERSERKER VISUAL EFFECTS
+     */
+
+    /**
+     * Create berserker activation effect
+     */
+    createBerserkerActivationEffect(x, y) {
+        // Expanding red energy wave
+        const wave = this.scene.add.graphics();
+        wave.lineStyle(4, 0xff0000, 0.9);
+        wave.strokeCircle(x, y, 15);
+
+        this.scene.tweens.add({
+            targets: wave,
+            scaleX: 6,
+            scaleY: 6,
+            alpha: 0,
+            duration: 600,
+            ease: 'Power2',
+            onComplete: () => wave.destroy()
+        });
+
+        // Secondary pulse
+        this.scene.time.delayedCall(100, () => {
+            const pulse = this.scene.add.graphics();
+            pulse.lineStyle(3, 0xff3333, 0.7);
+            pulse.strokeCircle(x, y, 20);
+
+            this.scene.tweens.add({
+                targets: pulse,
+                scaleX: 4,
+                scaleY: 4,
+                alpha: 0,
+                duration: 500,
+                ease: 'Power2',
+                onComplete: () => pulse.destroy()
+            });
+        });
+
+        // Activation flash
+        const flash = this.scene.add.circle(x, y, 20, 0xffffff, 0.9);
+
+        this.scene.tweens.add({
+            targets: flash,
+            scale: 4,
+            alpha: 0,
+            duration: 400,
+            ease: 'Power3',
+            onComplete: () => flash.destroy()
+        });
+
+        // Particle burst - fiery particles
+        for (let i = 0; i < 30; i++) {
+            const angle = (Math.PI * 2 * i) / 30;
+            const colors = [0xff0000, 0xff3300, 0xff6600, 0xff0033];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            const particle = this.scene.add.circle(x, y, Phaser.Math.Between(3, 6), color);
+
+            const distance = Phaser.Math.Between(40, 80);
+            this.scene.tweens.add({
+                targets: particle,
+                x: x + Math.cos(angle) * distance,
+                y: y + Math.sin(angle) * distance,
+                alpha: 0,
+                scale: 0,
+                duration: Phaser.Math.Between(300, 600),
+                ease: 'Power2',
+                onComplete: () => particle.destroy()
+            });
+        }
+
+        // Screen flash
+        const screenFlash = this.scene.add.rectangle(
+            this.scene.cameras.main.centerX,
+            this.scene.cameras.main.centerY,
+            this.scene.cameras.main.width,
+            this.scene.cameras.main.height,
+            0xff0000,
+            0.5
+        );
+        screenFlash.setScrollFactor(0);
+        screenFlash.setDepth(1000);
+
+        this.scene.tweens.add({
+            targets: screenFlash,
+            alpha: 0,
+            duration: 200,
+            onComplete: () => screenFlash.destroy()
+        });
+
+        // Camera shake
+        this.scene.cameras.main.shake(300, 0.008);
+    }
+
+    /**
+     * Create berserker aura around player
+     */
+    createBerserkerAura() {
+        if (this.berserkerGraphic) {
+            this.berserkerGraphic.destroy();
+        }
+
+        const player = this.scene.player;
+
+        // Container for berserker graphics (just particles, no glow)
+        this.berserkerGraphic = this.scene.add.container(player.x, player.y);
+        this.berserkerGraphic.setDepth(player.depth - 1); // Behind player
+
+        // Only fiery sparkle particles (no glow circles)
+        this.createBerserkerSparkles();
+    }
+
+    /**
+     * Create fiery sparkle particles around berserker aura
+     */
+    createBerserkerSparkles() {
+        // Continuously spawn fire sparkles while berserker is active
+        const sparkleEvent = this.scene.time.addEvent({
+            delay: 100,
+            callback: () => {
+                if (!this.berserkerActive) {
+                    sparkleEvent.remove();
+                    return;
+                }
+
+                const player = this.scene.player;
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Phaser.Math.Between(28, 40);
+                const x = player.x + Math.cos(angle) * distance;
+                const y = player.y + Math.sin(angle) * distance;
+
+                const colors = [0xff0000, 0xff3300, 0xff6600, 0xffaa00];
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                const sparkle = this.scene.add.circle(x, y, Phaser.Math.Between(2, 4), color, 0.9);
+
+                // Float upward
+                this.scene.tweens.add({
+                    targets: sparkle,
+                    y: y - Phaser.Math.Between(20, 40),
+                    alpha: 0,
+                    scale: 0,
+                    duration: Phaser.Math.Between(400, 700),
+                    ease: 'Power2',
+                    onComplete: () => sparkle.destroy()
+                });
+            },
+            loop: true
+        });
+    }
+
+    /**
+     * Create summon activation effect
+     */
+    createSummonActivationEffect(x, y) {
+        // Golden energy waves (summoning circle)
+        const waveCount = 3;
+        for (let i = 0; i < waveCount; i++) {
+            this.scene.time.delayedCall(i * 100, () => {
+                const wave = this.scene.add.graphics();
+                wave.lineStyle(3, 0xffcc00, 0.8);
+                wave.strokeCircle(x, y, 20 + i * 15);
+
+                this.scene.tweens.add({
+                    targets: wave,
+                    scaleX: 2,
+                    scaleY: 2,
+                    alpha: 0,
+                    duration: 600,
+                    ease: 'Power2',
+                    onComplete: () => wave.destroy()
+                });
+            });
+        }
+
+        // Golden flash
+        const flash = this.scene.add.circle(x, y, 25, 0xffffff, 0.8);
+
+        this.scene.tweens.add({
+            targets: flash,
+            scale: 3,
+            alpha: 0,
+            duration: 400,
+            ease: 'Power3',
+            onComplete: () => flash.destroy()
+        });
+
+        // Particle burst - golden particles
+        for (let i = 0; i < 25; i++) {
+            const angle = (Math.PI * 2 * i) / 25;
+            const colors = [0xffff00, 0xffcc00, 0xffaa00];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            const particle = this.scene.add.circle(x, y, Phaser.Math.Between(3, 5), color);
+
+            const distance = Phaser.Math.Between(50, 90);
+            this.scene.tweens.add({
+                targets: particle,
+                x: x + Math.cos(angle) * distance,
+                y: y + Math.sin(angle) * distance,
+                alpha: 0,
+                scale: 0,
+                duration: Phaser.Math.Between(400, 700),
+                ease: 'Power2',
+                onComplete: () => particle.destroy()
+            });
+        }
+
+        // Camera shake
+        this.scene.cameras.main.shake(200, 0.004);
     }
 }

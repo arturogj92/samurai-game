@@ -35,7 +35,7 @@ export const WORLD = {
 // Game Constants
 export const CONSTANTS = {
     SHOOTING_RANGE: 350,
-    MAX_SHURIKENS: 80,
+    MAX_SHURIKENS: 300,
     SHURIKEN_COOLDOWN: 500,
     ENEMY_SPAWN_RATE: 1000
 };

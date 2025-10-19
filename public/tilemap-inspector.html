@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tilemap Inspector</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #222;
+            color: #fff;
+            font-family: monospace;
+        }
+        #container {
+            position: relative;
+            display: inline-block;
+        }
+        #tilemap {
+            border: 2px solid #fff;
+            image-rendering: pixelated;
+            cursor: crosshair;
+        }
+        #info {
+            margin-top: 10px;
+            font-size: 16px;
+            background: #000;
+            padding: 10px;
+        }
+        #selection {
+            position: absolute;
+            border: 2px solid #0f0;
+            pointer-events: none;
+            background: rgba(0, 255, 0, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <h1>Tilemap Inspector - Click and drag to select area</h1>
+    <div id="container">
+        <canvas id="tilemap"></canvas>
+        <div id="selection"></div>
+    </div>
+    <div id="info">
+        Mouse: X=0, Y=0<br>
+        Selection: None<br>
+        Click and drag to select the green tile area you want
+    </div>
+
+    <script>
+        const canvas = document.getElementById('tilemap');
+        const ctx = canvas.getContext('2d');
+        const info = document.getElementById('info');
+        const selection = document.getElementById('selection');
+        const container = document.getElementById('container');
+
+        const img = new Image();
+        img.src = 'assets/Terrain/Ground/Tilemap_Flat.png';
+
+        img.onload = () => {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+        };
+
+        let selecting = false;
+        let startX = 0, startY = 0;
+        let endX = 0, endY = 0;
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor(e.clientX - rect.left);
+            const y = Math.floor(e.clientY - rect.top);
+
+            if (selecting) {
+                endX = x;
+                endY = y;
+                updateSelection();
+            }
+
+            updateInfo(x, y);
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            startX = Math.floor(e.clientX - rect.left);
+            startY = Math.floor(e.clientY - rect.top);
+            selecting = true;
+            selection.style.display = 'block';
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            selecting = false;
+        });
+
+        function updateSelection() {
+            const left = Math.min(startX, endX);
+            const top = Math.min(startY, endY);
+            const width = Math.abs(endX - startX);
+            const height = Math.abs(endY - startY);
+
+            selection.style.left = left + 'px';
+            selection.style.top = top + 'px';
+            selection.style.width = width + 'px';
+            selection.style.height = height + 'px';
+        }
+
+        function updateInfo(x, y) {
+            const left = Math.min(startX, endX);
+            const top = Math.min(startY, endY);
+            const width = Math.abs(endX - startX);
+            const height = Math.abs(endY - startY);
+
+            info.innerHTML = `
+                Mouse: X=${x}, Y=${y}<br>
+                ${selecting || (startX && endX) ? `
+                    <strong style="color: #0f0;">
+                    Selection: X=${left}, Y=${top}, Width=${width}, Height=${height}<br>
+                    Code: cropX=${left}, cropY=${top}, cropWidth=${width}, cropHeight=${height}
+                    </strong>
+                ` : 'Selection: None<br>Click and drag to select the green tile area you want'}
+            `;
+        }
+    </script>
+</body>
+</html>

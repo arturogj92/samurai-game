@@ -17,10 +17,16 @@ export default class MouseFireSystem {
      * Fire arrow toward a specific world position (from mouse click)
      */
     fireAtPosition(worldX, worldY, currentTime) {
-        if (!this.enabled) return false;
+        if (!this.enabled) {
+            console.log('🚫 Mouse fire: DISABLED');
+            return false;
+        }
 
         // Don't start new shot if already firing
-        if (this.isFiring) return false;
+        if (this.isFiring) {
+            console.log('⏳ Mouse fire: BLOCKED - already firing (isFiring=true)');
+            return false;
+        }
 
         // Check cooldown
         if (currentTime - this.lastFireTime < this.fireRate) {
@@ -28,31 +34,55 @@ export default class MouseFireSystem {
             return false;
         }
 
-        // Calculate angle from player to target position
+        // Calculate initial angle for animation selection
         const playerX = this.scene.player.x;
         const playerY = this.scene.player.y;
-        const angle = Phaser.Math.Angle.Between(playerX, playerY, worldX, worldY);
+        const initialAngle = Phaser.Math.Angle.Between(playerX, playerY, worldX, worldY);
 
         // Mark as firing to prevent new shots
         this.isFiring = true;
 
+        // CRITICAL FIX: Disable auto-fire to prevent animation interference
+        // Auto-fire will be re-enabled when animation completes
+        const wasAutoFireEnabled = this.scene.autoFireSystem.enabled;
+        if (wasAutoFireEnabled) {
+            this.scene.autoFireSystem.disable();
+            console.log('🚫 Auto-fire disabled for manual shot');
+        }
+
         // Start the shot animation and spawn projectile when it completes
         this.playShootAnimation(() => {
-            this.spawnProjectile(angle);
+            // IMPORTANT: Pass target position to recalculate angle from CURRENT player position
+            // This fixes aiming when player moves during animation
+            this.spawnProjectile(worldX, worldY);
             this.isFiring = false;
-        }, angle); // Pass angle to select correct animation
+
+            // CRITICAL FIX: Re-enable auto-fire after manual shot completes
+            if (wasAutoFireEnabled) {
+                this.scene.autoFireSystem.enable();
+                console.log('✅ Auto-fire re-enabled after manual shot');
+            }
+        }, initialAngle); // Use initial angle for animation selection
 
         this.lastFireTime = currentTime;
-        console.log('🏹 Mouse fire: angle =', (angle * 180 / Math.PI).toFixed(1), '°');
+        console.log('🏹 Mouse fire: initial angle =', (initialAngle * 180 / Math.PI).toFixed(1), '°');
         return true;
     }
 
-    spawnProjectile(angle) {
+    spawnProjectile(targetX, targetY) {
+        // CRITICAL: Recalculate angle using CURRENT player position and ORIGINAL target position
+        // This fixes aiming when player moves during animation delay
+        const playerX = this.scene.player.x;
+        const playerY = this.scene.player.y;
+        const angle = Phaser.Math.Angle.Between(playerX, playerY, targetX, targetY);
+
+        console.log(`🎯 Spawn: Recalculated angle = ${(angle * 180 / Math.PI).toFixed(1)}°`);
+
         // Calculate bow offset based on shooting direction
         // This makes arrows spawn from the visual bow position instead of player center
         const bowOffset = this.getBowOffset(angle);
-        const spawnX = this.scene.player.x + bowOffset.x;
-        const spawnY = this.scene.player.y + bowOffset.y;
+        const spawnX = playerX + bowOffset.x;
+        const spawnY = playerY + bowOffset.y;
 
         // Create projectile directly
         const Projectile = this.scene.projectiles.classType;
@@ -74,8 +104,10 @@ export default class MouseFireSystem {
         projectile.stuckOffsetX = 0;
         projectile.stuckOffsetY = 0;
 
-        // Set damage and speed
-        projectile.damage = 20;
+        // Set damage and speed (apply player damage multiplier for berserker mode)
+        const baseDamage = 20;
+        const damageMultiplier = this.scene.player.damageMultiplier || 1.0;
+        projectile.damage = baseDamage * damageMultiplier;
         const speed = 320; // Reduced from 400 for better visibility
 
         const velocityX = Math.cos(angle) * speed;

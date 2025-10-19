@@ -22,15 +22,24 @@ window.addEventListener('error', (event) => {
 
 // Unhandled promise rejection handler
 window.addEventListener('unhandledrejection', (event) => {
-    console.error('🔴 Unhandled promise rejection:', {
-        reason: event.reason,
-        promise: event.promise
-    });
+    console.error('🔴 Unhandled promise rejection:');
+    console.error('Reason type:', typeof event.reason);
+    console.error('Reason:', event.reason);
+
+    // Try to serialize the reason
+    try {
+        console.error('Reason (JSON):', JSON.stringify(event.reason, null, 2));
+    } catch (e) {
+        console.error('Could not stringify reason:', e);
+    }
 
     // If the reason is an error with a stack, log it
     if (event.reason && event.reason.stack) {
         console.error('Stack trace:', event.reason.stack);
     }
+
+    // Prevent webpack overlay from showing [object Object]
+    event.preventDefault();
 });
 
 // Create the Phaser game instance

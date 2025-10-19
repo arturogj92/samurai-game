@@ -9,9 +9,9 @@ export default class CollisionSystem {
     }
 
     update() {
-        // Check each active arrow against all enemies using raycast
+        // Check each active arrow against all enemies and huts using raycast
         this.scene.projectiles.getChildren().forEach(arrow => {
-            if (!arrow.active || arrow.stuckToEnemy) return;
+            if (!arrow.active || arrow.stuckToEnemy || arrow.stuckToHut) return;
 
             // Get arrow tip positions (current and previous)
             const prevTip = arrow.getPrevTipPosition();
@@ -24,6 +24,16 @@ export default class CollisionSystem {
                 // Check if raycast line intersects with enemy hitbox
                 if (this.lineIntersectsEnemy(prevTip, currTip, enemy)) {
                     this.onProjectileHitEnemy(arrow, enemy);
+                }
+            });
+
+            // Check raycast against all goblin huts
+            this.scene.goblinHuts.getChildren().forEach(hut => {
+                if (hut.isDestroyed || !hut.active) return;
+
+                // Check if raycast line intersects with hut hitbox
+                if (this.lineIntersectsHut(prevTip, currTip, hut)) {
+                    this.onProjectileHitHut(arrow, hut);
                 }
             });
         });
@@ -111,10 +121,35 @@ export default class CollisionSystem {
         return ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1;
     }
 
+    // Check if a line segment intersects with a hut's hitbox
+    lineIntersectsHut(p1, p2, hut) {
+        if (!hut.body) {
+            // Fallback: use sprite position and size
+            const width = hut.width * 0.6;  // Match reduced hitbox from GoblinHut.js
+            const height = hut.height * 0.6;
+            const rect = {
+                x: hut.x - width / 2,
+                y: hut.y - height / 2,
+                width: width,
+                height: height
+            };
+            return this.lineIntersectsRect(p1, p2, rect);
+        }
+
+        // Use physics body bounds
+        const rect = {
+            x: hut.body.x,
+            y: hut.body.y,
+            width: hut.body.width,
+            height: hut.body.height
+        };
+        return this.lineIntersectsRect(p1, p2, rect);
+    }
+
     onProjectileHitEnemy(projectile, enemy) {
         if (enemy.isDying) return;
         if (!projectile || !projectile.active) return;
-        if (projectile.stuckToEnemy) return; // Already stuck
+        if (projectile.stuckToEnemy || projectile.stuckToHut) return; // Already stuck
 
         // Deal damage to enemy
         enemy.takeDamage(projectile.damage);
@@ -136,5 +171,30 @@ export default class CollisionSystem {
         projectile.setAlpha(0.9);
 
         console.log('🎯 Raycast hit! Arrow stuck to enemy!');
+    }
+
+    onProjectileHitHut(projectile, hut) {
+        if (hut.isDestroyed) return;
+        if (!projectile || !projectile.active) return;
+        if (projectile.stuckToEnemy || projectile.stuckToHut) return; // Already stuck
+
+        // Deal damage to hut
+        hut.takeDamage(projectile.damage);
+
+        // Change to stuck arrow sprite (Arrow_hit.png)
+        projectile.setTexture('arrow-hit');
+
+        // Stop the arrow
+        projectile.stop();
+
+        // Store reference to hut so arrow stays in place
+        projectile.stuckToHut = hut;
+        projectile.stuckRotation = projectile.rotation;
+
+        // Remove glow effect from stuck arrow
+        projectile.setBlendMode(Phaser.BlendModes.NORMAL);
+        projectile.setAlpha(0.9);
+
+        console.log('🎯 Raycast hit! Arrow stuck to hut!');
     }
 }

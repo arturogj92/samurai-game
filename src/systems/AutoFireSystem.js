@@ -9,7 +9,7 @@ export default class AutoFireSystem {
         this.scene = scene;
         this.lastFireTime = 0;
         this.fireRate = 500; // ms between shots
-        this.range = 200; // pixels - max range to fire (reduced for closer combat)
+        this.range = 350; // pixels - max range to fire (same for enemies and huts)
         this.enabled = true;
         this.isFiring = false; // Track if currently in a firing animation
     }
@@ -23,10 +23,10 @@ export default class AutoFireSystem {
         // Check cooldown
         if (time - this.lastFireTime < this.fireRate) return;
 
-        // Find nearest enemy
-        const target = this.findNearestEnemy();
+        // Find nearest target (enemy or hut)
+        const target = this.findNearestTarget();
         if (!target) {
-            // console.log('🎯 No enemies found');
+            // console.log('🎯 No targets found');
             return;
         }
 
@@ -39,12 +39,12 @@ export default class AutoFireSystem {
         );
 
         if (distance > this.range) {
-            // console.log(`🎯 Enemy too far: ${Math.round(distance)}px > ${this.range}px`);
+            // console.log(`🎯 Target too far: ${Math.round(distance)}px > ${this.range}px`);
             return;
         }
 
         // Fire!
-        // console.log('🏹 FIRING at enemy!', distance);
+        // console.log('🏹 FIRING at target!', distance);
         this.fireProjectile(target);
         this.lastFireTime = time;
     }
@@ -53,31 +53,40 @@ export default class AutoFireSystem {
         // Mark as firing to prevent new shots
         this.isFiring = true;
 
-        // Store target info
+        // Capture target position NOW (before enemy moves)
         const targetX = target.x;
         const targetY = target.y;
+
+        // Calculate initial angle for animation selection
         const playerX = this.scene.player.x;
         const playerY = this.scene.player.y;
-
-        // Calculate angle NOW (before target moves)
-        const angle = Phaser.Math.Angle.Between(playerX, playerY, targetX, targetY);
+        const initialAngle = Phaser.Math.Angle.Between(playerX, playerY, targetX, targetY);
 
         // Start the shot animation and get callback when it completes
         this.playShootAnimation(() => {
             // This fires when animation completes
-            this.spawnProjectile(angle);
+            // IMPORTANT: Pass target position to recalculate angle from CURRENT player position
+            this.spawnProjectile(targetX, targetY);
 
             // Mark as no longer firing
             this.isFiring = false;
-        }, angle); // Pass angle to select correct animation
+        }, initialAngle); // Use initial angle for animation selection
     }
 
-    spawnProjectile(angle) {
+    spawnProjectile(targetX, targetY) {
+        // CRITICAL: Recalculate angle using CURRENT player position and ORIGINAL target position
+        // This fixes aiming when player moves during animation delay
+        const playerX = this.scene.player.x;
+        const playerY = this.scene.player.y;
+        const angle = Phaser.Math.Angle.Between(playerX, playerY, targetX, targetY);
+
+        console.log(`🎯 Auto-spawn: Recalculated angle = ${(angle * 180 / Math.PI).toFixed(1)}°`);
+
         // Calculate bow offset based on shooting direction
         // This makes arrows spawn from the visual bow position instead of player center
         const bowOffset = this.getBowOffset(angle);
-        const spawnX = this.scene.player.x + bowOffset.x;
-        const spawnY = this.scene.player.y + bowOffset.y;
+        const spawnX = playerX + bowOffset.x;
+        const spawnY = playerY + bowOffset.y;
 
         // Import Projectile class
         const Projectile = this.scene.projectiles.classType;
@@ -99,8 +108,10 @@ export default class AutoFireSystem {
         projectile.stuckOffsetX = 0;
         projectile.stuckOffsetY = 0;
 
-        // Set damage and speed
-        projectile.damage = 20;
+        // Set damage and speed (apply player damage multiplier for berserker mode)
+        const baseDamage = 20;
+        const damageMultiplier = this.scene.player.damageMultiplier || 1.0;
+        projectile.damage = baseDamage * damageMultiplier;
         const speed = 320; // Reduced from 400 for better visibility
 
         const velocityX = Math.cos(angle) * speed;
@@ -273,6 +284,27 @@ export default class AutoFireSystem {
         return { frameStart, frameEnd, animKey, flipX };
     }
 
+    /**
+     * Find nearest target - prioritizes enemies first, then goblin huts
+     */
+    findNearestTarget() {
+        // First, try to find enemies (priority)
+        const enemy = this.findNearestEnemy();
+        if (enemy) {
+            console.log('🎯 AutoFire: Found enemy target');
+            return enemy;
+        }
+
+        // If no enemies, target nearest goblin hut
+        const hut = this.findNearestHut();
+        if (hut) {
+            console.log('🏠 AutoFire: Found hut target (no enemies available)');
+        } else {
+            console.log('❌ AutoFire: No targets found');
+        }
+        return hut;
+    }
+
     findNearestEnemy() {
         const enemies = this.scene.enemies.getChildren()
             .filter(e => !e.isDying && e.active);
@@ -293,6 +325,34 @@ export default class AutoFireSystem {
             if (dist < minDist) {
                 minDist = dist;
                 nearest = enemy;
+            }
+        }
+
+        return nearest;
+    }
+
+    findNearestHut() {
+        if (!this.scene.goblinHuts) return null;
+
+        const huts = this.scene.goblinHuts.getChildren()
+            .filter(h => h.active && !h.isDestroyed);
+
+        if (huts.length === 0) return null;
+
+        let nearest = null;
+        let minDist = Infinity;
+
+        for (const hut of huts) {
+            const dist = Phaser.Math.Distance.Between(
+                this.scene.player.x,
+                this.scene.player.y,
+                hut.x,
+                hut.y
+            );
+
+            if (dist < minDist) {
+                minDist = dist;
+                nearest = hut;
             }
         }
 

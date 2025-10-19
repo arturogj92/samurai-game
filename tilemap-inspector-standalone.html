@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tilemap Inspector Pro</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #222;
+            color: #fff;
+            font-family: monospace;
+        }
+        .main-container {
+            display: flex;
+            gap: 20px;
+        }
+        #tileset-container {
+            position: relative;
+            display: inline-block;
+        }
+        #tilemap {
+            border: 2px solid #fff;
+            image-rendering: pixelated;
+            cursor: crosshair;
+        }
+        #grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+        #selection {
+            position: absolute;
+            border: 4px solid #0f0;
+            pointer-events: none;
+            background: rgba(0, 255, 0, 0.4);
+            box-shadow: 0 0 20px #0f0;
+        }
+        #preview-container {
+            flex: 1;
+            min-width: 400px;
+        }
+        #preview {
+            border: 2px solid #0ff;
+            image-rendering: pixelated;
+            background: #000;
+        }
+        #info {
+            margin-top: 10px;
+            font-size: 16px;
+            background: #000;
+            padding: 15px;
+            border: 2px solid #0f0;
+        }
+        .code {
+            color: #0f0;
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 10px;
+            padding: 10px;
+            background: #111;
+            border: 2px solid #0f0;
+        }
+        .controls {
+            margin: 10px 0;
+            padding: 10px;
+            background: #333;
+            border: 2px solid #666;
+        }
+        button {
+            padding: 8px 15px;
+            margin: 5px;
+            background: #0a0;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        button:hover {
+            background: #0d0;
+        }
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        .frame-info {
+            font-size: 20px;
+            color: #ff0;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎯 Tilemap Inspector Pro - 64x64 Grid</h1>
+    <p style="font-size: 16px;">Click en cualquier tile para seleccionarlo y ver cómo se repite →</p>
+
+    <div class="controls">
+        <strong>Navegación:</strong>
+        <button onclick="moveTile(-1, 0)">← Izquierda</button>
+        <button onclick="moveTile(1, 0)">Derecha →</button>
+        <button onclick="moveTile(0, -1)">↑ Arriba</button>
+        <button onclick="moveTile(0, 1)">Abajo ↓</button>
+        <span class="frame-info" id="frame-display">Frame: -</span>
+    </div>
+
+    <div class="main-container">
+        <div>
+            <h3>Tileset Original (640x256)</h3>
+            <div id="tileset-container">
+                <canvas id="tilemap"></canvas>
+                <canvas id="grid-overlay"></canvas>
+                <div id="selection" style="display: none;"></div>
+            </div>
+            <div id="info">
+                Mouse: X=0, Y=0<br>
+                Tile seleccionado: Ninguno<br>
+                <strong>👆 Click en un tile para seleccionarlo</strong>
+            </div>
+        </div>
+
+        <div id="preview-container">
+            <h3>Vista Previa (Cómo se verá repetido)</h3>
+            <canvas id="preview" width="512" height="512"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const TILE_SIZE = 64;
+        const TILESET_WIDTH = 640;
+        const TILESET_HEIGHT = 256;
+        const COLS = TILESET_WIDTH / TILE_SIZE; // 10
+        const ROWS = TILESET_HEIGHT / TILE_SIZE; // 4
+
+        const canvas = document.getElementById('tilemap');
+        const ctx = canvas.getContext('2d');
+        const gridCanvas = document.getElementById('grid-overlay');
+        const gridCtx = gridCanvas.getContext('2d');
+        const previewCanvas = document.getElementById('preview');
+        const previewCtx = previewCanvas.getContext('2d');
+        const info = document.getElementById('info');
+        const selection = document.getElementById('selection');
+
+        let selectedTileX = -1;
+        let selectedTileY = -1;
+        let selectedFrame = -1;
+
+        const img = new Image();
+        img.src = 'file:///Users/vzgb9jp/Development/vampire_demo/assets/Terrain/Ground/Tilemap_Flat.png';
+
+        img.onload = () => {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            gridCanvas.width = img.width;
+            gridCanvas.height = img.height;
+
+            ctx.drawImage(img, 0, 0);
+            drawGrid();
+            console.log('✅ Tilemap cargado:', img.width, 'x', img.height);
+        };
+
+        img.onerror = () => {
+            info.innerHTML = '<span style="color: red;">❌ ERROR: No se pudo cargar la imagen</span>';
+        };
+
+        function drawGrid() {
+            gridCtx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
+            gridCtx.strokeStyle = '#0ff';
+            gridCtx.lineWidth = 1;
+
+            // Draw vertical lines
+            for (let x = 0; x <= TILESET_WIDTH; x += TILE_SIZE) {
+                gridCtx.beginPath();
+                gridCtx.moveTo(x, 0);
+                gridCtx.lineTo(x, TILESET_HEIGHT);
+                gridCtx.stroke();
+            }
+
+            // Draw horizontal lines
+            for (let y = 0; y <= TILESET_HEIGHT; y += TILE_SIZE) {
+                gridCtx.beginPath();
+                gridCtx.moveTo(0, y);
+                gridCtx.lineTo(TILESET_WIDTH, y);
+                gridCtx.stroke();
+            }
+
+            // Draw tile numbers
+            gridCtx.fillStyle = '#0ff';
+            gridCtx.font = 'bold 12px monospace';
+            gridCtx.textAlign = 'center';
+            gridCtx.textBaseline = 'middle';
+
+            for (let row = 0; row < ROWS; row++) {
+                for (let col = 0; col < COLS; col++) {
+                    const frame = (row * COLS) + col;
+                    const x = col * TILE_SIZE + TILE_SIZE / 2;
+                    const y = row * TILE_SIZE + 10;
+
+                    // Draw frame number with background
+                    gridCtx.fillStyle = '#000';
+                    gridCtx.fillRect(x - 15, y - 8, 30, 16);
+                    gridCtx.fillStyle = '#0ff';
+                    gridCtx.fillText(frame, x, y);
+                }
+            }
+        }
+
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor(e.clientX - rect.left);
+            const y = Math.floor(e.clientY - rect.top);
+
+            // Snap to tile grid
+            selectedTileX = Math.floor(x / TILE_SIZE);
+            selectedTileY = Math.floor(y / TILE_SIZE);
+
+            // Clamp to valid range
+            selectedTileX = Math.max(0, Math.min(COLS - 1, selectedTileX));
+            selectedTileY = Math.max(0, Math.min(ROWS - 1, selectedTileY));
+
+            selectTile(selectedTileX, selectedTileY);
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = Math.floor(e.clientX - rect.left);
+            const y = Math.floor(e.clientY - rect.top);
+
+            const tileX = Math.floor(x / TILE_SIZE);
+            const tileY = Math.floor(y / TILE_SIZE);
+            const frame = (tileY * COLS) + tileX;
+
+            if (selectedFrame >= 0) {
+                info.innerHTML = `
+                    Mouse: X=${x}, Y=${y} | Tile: (${tileX}, ${tileY}) Frame ${frame}<br>
+                    <div class="code">
+                    ✅ TILE SELECCIONADO:<br>
+                    TileX = ${selectedTileX}, TileY = ${selectedTileY}<br>
+                    Frame = ${selectedFrame}<br>
+                    Usar en código: this.TILES.GRASS_GREEN = ${selectedFrame}
+                    </div>
+                `;
+            } else {
+                info.innerHTML = `
+                    Mouse: X=${x}, Y=${y}<br>
+                    Tile: (${tileX}, ${tileY}) Frame ${frame}<br>
+                    <strong>👆 Click en un tile para seleccionarlo</strong>
+                `;
+            }
+        });
+
+        function selectTile(tileX, tileY) {
+            selectedFrame = (tileY * COLS) + tileX;
+
+            // Update selection box
+            selection.style.display = 'block';
+            selection.style.left = (tileX * TILE_SIZE) + 'px';
+            selection.style.top = (tileY * TILE_SIZE) + 'px';
+            selection.style.width = TILE_SIZE + 'px';
+            selection.style.height = TILE_SIZE + 'px';
+
+            // Update frame display
+            document.getElementById('frame-display').textContent = `Frame: ${selectedFrame} (Tile ${tileX}, ${tileY})`;
+
+            // Update preview
+            updatePreview();
+        }
+
+        function updatePreview() {
+            if (selectedFrame < 0) return;
+
+            const tilesX = Math.ceil(previewCanvas.width / TILE_SIZE);
+            const tilesY = Math.ceil(previewCanvas.height / TILE_SIZE);
+
+            previewCtx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
+
+            const srcX = selectedTileX * TILE_SIZE;
+            const srcY = selectedTileY * TILE_SIZE;
+
+            // Draw repeated tile
+            for (let y = 0; y < tilesY; y++) {
+                for (let x = 0; x < tilesX; x++) {
+                    previewCtx.drawImage(
+                        img,
+                        srcX, srcY, TILE_SIZE, TILE_SIZE,
+                        x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE
+                    );
+                }
+            }
+        }
+
+        function moveTile(dx, dy) {
+            if (selectedTileX < 0) {
+                selectedTileX = 0;
+                selectedTileY = 0;
+            }
+
+            selectedTileX += dx;
+            selectedTileY += dy;
+
+            // Clamp
+            selectedTileX = Math.max(0, Math.min(COLS - 1, selectedTileX));
+            selectedTileY = Math.max(0, Math.min(ROWS - 1, selectedTileY));
+
+            selectTile(selectedTileX, selectedTileY);
+        }
+
+        // Make moveTile available globally for buttons
+        window.moveTile = moveTile;
+    </script>
+</body>
+</html>

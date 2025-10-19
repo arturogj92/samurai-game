@@ -19,8 +19,9 @@ export default class Projectile extends Phaser.GameObjects.Sprite {
         this.prevX = x;
         this.prevY = y;
 
-        // Stuck state
+        // Stuck state (can stick to enemies or huts)
         this.stuckToEnemy = null;
+        this.stuckToHut = null;
         this.stuckOffsetX = 0;
         this.stuckOffsetY = 0;
         this.stuckRotation = 0;
@@ -63,6 +64,23 @@ export default class Projectile extends Phaser.GameObjects.Sprite {
             this.y = this.stuckToEnemy.y + this.stuckOffsetY;
 
             // Keep the rotation frozen when arrow stuck
+            this.rotation = this.stuckRotation;
+            return;
+        }
+
+        // If arrow is stuck to a hut, stay in place
+        if (this.stuckToHut) {
+            // Check if hut is still alive
+            if (!this.stuckToHut.active || this.stuckToHut.isDestroyed) {
+                // Hut destroyed, remove the arrow
+                this.setActive(false);
+                this.setVisible(false);
+                this.stuckToHut = null;
+                return;
+            }
+
+            // Huts don't move, so we just freeze in place
+            // Position is already set when stuck
             this.rotation = this.stuckRotation;
             return;
         }

@@ -13,7 +13,7 @@ export default class EnemySpawnSystem {
         this.spawnDistance = 600; // pixels away from player
         this.maxEnemies = 10; // max concurrent enemies
         this.enabled = true;
-        this.enemyTypes = ['goblin']; // Can add more types later
+        this.enemyTypes = ['goblin', 'lancer']; // Multiple enemy types
     }
 
     update(time) {
