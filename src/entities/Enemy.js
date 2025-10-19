@@ -34,6 +34,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
         this.isDying = false;
         this.deathStartTime = 0;
         this.isAttacking = false; // Track if attack animation is playing
+        this.isKnockedBack = false; // Track if enemy is being knocked back
 
         // Guard mode system
         this.isGuard = false; // Whether this enemy is a guard
@@ -60,6 +61,27 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
         this.isGuard = true;
         this.isActivated = false;
         this.guardPosition = { x: guardX, y: guardY };
+    }
+
+    /**
+     * Set this enemy as a HUNTER - rare enemy with extended detection range
+     * Hunters can detect the player from very far away
+     */
+    setAsHunter(guardX, guardY) {
+        this.isGuard = true;
+        this.isActivated = false;
+        this.guardPosition = { x: guardX, y: guardY };
+        this.activationRange = 800; // MUCH longer range (vs normal 250px)
+
+        // Enhanced stats for hunters
+        this.speed *= 1.5; // 50% faster
+        this.damage *= 1.5; // 50% more damage
+        this.health *= 1.3; // 30% more health
+
+        // Visual indicator - red tint to show this is a special enemy
+        this.setTint(0xff6666);
+
+        console.log(`🎯 HUNTER spawned! Range: ${this.activationRange}px, Speed: ${this.speed}, Damage: ${this.damage}`);
     }
 
     configureStats() {
@@ -200,8 +222,8 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
         // Update depth for dynamic layering with environment (Y-based sorting)
         this.setDepth(this.y);
 
-        // CRITICAL: Don't move or change animations while attacking
-        if (this.isAttacking) return;
+        // CRITICAL: Don't move or change animations while attacking or being knocked back
+        if (this.isAttacking || this.isKnockedBack) return;
 
         // Check if enemy is dead
         if (this.health <= 0) {
@@ -386,6 +408,34 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
         // 20% chance for critical hit - ¡MÁS DOPAMINA!
         const isCritical = Math.random() < 0.2;
         const displayDamage = isCritical ? amount * 2 : amount;
+
+        // Apply knockback effect if we have a hit angle
+        if (hitAngle !== null) {
+            // Different knockback strength for normal vs critical hits
+            const knockbackForce = isCritical ? 220 : 65; // Stronger knockback for crits
+            const knockbackDuration = isCritical ? 170 : 80; // Longer knockback for crits
+
+            // Calculate knockback velocity based on arrow direction
+            const knockbackVelX = Math.cos(hitAngle) * knockbackForce;
+            const knockbackVelY = Math.sin(hitAngle) * knockbackForce;
+
+            // Mark enemy as being knocked back to prevent update() from overriding velocity
+            this.isKnockedBack = true;
+
+            // Apply immediate knockback velocity
+            this.setVelocity(knockbackVelX, knockbackVelY);
+
+            // Return to normal movement after brief knockback
+            this.scene.time.delayedCall(knockbackDuration, () => {
+                // Reset knockback flag and velocity
+                this.isKnockedBack = false;
+
+                // Only reset velocity if not dying
+                if (!this.isDying && !this.isAttacking) {
+                    this.setVelocity(0, 0);
+                }
+            });
+        }
 
         // Spawn floating damage number
         if (this.scene.damageNumberSystem) {

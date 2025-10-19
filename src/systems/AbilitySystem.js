@@ -63,6 +63,9 @@ export default class AbilitySystem {
         this.berserkerGraphic = null;
         this.originalSpeed = null;
         this.originalFireRate = null;
+
+        // Tutorial state
+        this.hasShownHoldETutorial = false;
     }
 
     /**
@@ -181,6 +184,11 @@ export default class AbilitySystem {
         // Calculate charge level (0-1, max 3 seconds)
         const chargeTime = time - this.burstChargeStartTime;
         const chargeLevel = Math.min(chargeTime / 3000, 1);
+
+        // Tutorial: Show "HOLD E!" if released too quickly
+        if (chargeTime < 300) { // Less than 0.3 seconds
+            this.showHoldETutorial();
+        }
 
         // Scale based on charge: 0.7 to 1.2
         const arrowScale = 0.7 + (chargeLevel * 0.5);
@@ -793,6 +801,9 @@ export default class AbilitySystem {
         // Screen shake for impact
         this.scene.cameras.main.shake(200, 0.005);
 
+        // CRITICAL: Show origin point at player position
+        this.createLightningOriginEffect(x1, y1);
+
         // Main lightning bolt with glow
         this.drawMainLightningBolt(x1, y1, x2, y2);
 
@@ -817,7 +828,7 @@ export default class AbilitySystem {
 
         // Generate jagged lightning path with more segments for smoother look
         const segments = 8;
-        const points = [{ x: x1, y: y1 }];
+        const points = [{ x: x1, y: y1 }]; // First point is EXACT player position (no randomization)
 
         for (let i = 1; i < segments; i++) {
             const t = i / segments;
@@ -827,29 +838,34 @@ export default class AbilitySystem {
         }
         points.push({ x: x2, y: y2 });
 
-        // Draw outer glow (cyan/white)
-        graphics.lineStyle(12, 0xccffff, 0.3);
+        // Draw outer glow (cyan/white) - FIRST segment is THICKER
         for (let i = 0; i < points.length - 1; i++) {
+            const lineWidth = i === 0 ? 20 : 12; // First segment 66% thicker
+            const alpha = i === 0 ? 0.5 : 0.3; // First segment more visible
+            graphics.lineStyle(lineWidth, 0xccffff, alpha);
             graphics.lineBetween(points[i].x, points[i].y, points[i + 1].x, points[i + 1].y);
         }
 
-        // Draw middle glow (bright cyan)
-        graphics.lineStyle(6, 0x00ffff, 0.6);
+        // Draw middle glow (bright cyan) - FIRST segment is THICKER
         for (let i = 0; i < points.length - 1; i++) {
+            const lineWidth = i === 0 ? 10 : 6; // First segment 66% thicker
+            const alpha = i === 0 ? 0.8 : 0.6; // First segment more visible
+            graphics.lineStyle(lineWidth, 0x00ffff, alpha);
             graphics.lineBetween(points[i].x, points[i].y, points[i + 1].x, points[i + 1].y);
         }
 
-        // Draw core (bright white-yellow)
-        graphics.lineStyle(2, 0xffffff, 1);
+        // Draw core (bright white-yellow) - FIRST segment is THICKER
         for (let i = 0; i < points.length - 1; i++) {
+            const lineWidth = i === 0 ? 4 : 2; // First segment 100% thicker
+            graphics.lineStyle(lineWidth, 0xffffff, 1);
             graphics.lineBetween(points[i].x, points[i].y, points[i + 1].x, points[i + 1].y);
         }
 
-        // Animate and fade
+        // Animate and fade (EXTENDED duration for visibility)
         this.scene.tweens.add({
             targets: graphics,
             alpha: 0,
-            duration: 200,
+            duration: 500, // Increased from 200ms to 500ms
             ease: 'Power2',
             onComplete: () => graphics.destroy()
         });
@@ -899,11 +915,11 @@ export default class AbilitySystem {
                 graphics.lineBetween(points[i].x, points[i].y, points[i + 1].x, points[i + 1].y);
             }
 
-            // Fade out with slight delay
+            // Fade out with slight delay (EXTENDED duration)
             this.scene.tweens.add({
                 targets: graphics,
                 alpha: 0,
-                duration: 150,
+                duration: 400, // Increased from 150ms to 400ms
                 delay: b * 20,
                 onComplete: () => graphics.destroy()
             });
@@ -933,7 +949,7 @@ export default class AbilitySystem {
                 y: y + vy,
                 alpha: 0,
                 scale: 0,
-                duration: Phaser.Math.Between(150, 300),
+                duration: Phaser.Math.Between(400, 600), // Increased from 150-300ms to 400-600ms
                 ease: 'Power2',
                 onComplete: () => spark.destroy()
             });
@@ -951,7 +967,7 @@ export default class AbilitySystem {
             targets: impact,
             scale: 3,
             alpha: 0,
-            duration: 300,
+            duration: 600, // Increased from 300ms to 600ms
             ease: 'Power2',
             onComplete: () => impact.destroy()
         });
@@ -966,7 +982,7 @@ export default class AbilitySystem {
             scaleX: 2.5,
             scaleY: 2.5,
             alpha: 0,
-            duration: 400,
+            duration: 700, // Increased from 400ms to 700ms
             ease: 'Power2',
             onComplete: () => ring.destroy()
         });
@@ -984,7 +1000,7 @@ export default class AbilitySystem {
                 y: y + Math.sin(angle) * distance,
                 alpha: 0,
                 scale: 0,
-                duration: Phaser.Math.Between(200, 400),
+                duration: Phaser.Math.Between(500, 800), // Increased from 200-400ms to 500-800ms
                 ease: 'Power3',
                 onComplete: () => spark.destroy()
             });
@@ -1011,6 +1027,91 @@ export default class AbilitySystem {
             alpha: 0,
             duration: 100,
             onComplete: () => flash.destroy()
+        });
+    }
+
+    /**
+     * Create lightning origin effect - Shows clearly where lightning starts (player position)
+     */
+    createLightningOriginEffect(x, y) {
+        // Bright central flash at player position (VERY visible)
+        const originFlash = this.scene.add.circle(x, y, 12, 0xffffff, 1);
+        originFlash.setDepth(100); // High depth to be visible
+
+        this.scene.tweens.add({
+            targets: originFlash,
+            scale: 2.5,
+            alpha: 0,
+            duration: 500, // Increased from 250ms to 500ms
+            ease: 'Power2',
+            onComplete: () => originFlash.destroy()
+        });
+
+        // Electric ring expanding from player
+        const originRing = this.scene.add.graphics();
+        originRing.lineStyle(4, 0x00ffff, 1);
+        originRing.strokeCircle(x, y, 8);
+        originRing.setDepth(100);
+
+        this.scene.tweens.add({
+            targets: originRing,
+            scaleX: 3,
+            scaleY: 3,
+            alpha: 0,
+            duration: 600, // Increased from 300ms to 600ms
+            ease: 'Power2',
+            onComplete: () => originRing.destroy()
+        });
+
+        // Second ring for emphasis
+        this.scene.time.delayedCall(50, () => {
+            const ring2 = this.scene.add.graphics();
+            ring2.lineStyle(3, 0xccffff, 0.8);
+            ring2.strokeCircle(x, y, 10);
+            ring2.setDepth(100);
+
+            this.scene.tweens.add({
+                targets: ring2,
+                scaleX: 2.5,
+                scaleY: 2.5,
+                alpha: 0,
+                duration: 550, // Increased from 250ms to 550ms
+                ease: 'Power2',
+                onComplete: () => ring2.destroy()
+            });
+        });
+
+        // Electric particles bursting from player origin
+        const burstParticleCount = 16;
+        for (let i = 0; i < burstParticleCount; i++) {
+            const angle = (Math.PI * 2 * i) / burstParticleCount;
+            const particle = this.scene.add.circle(x, y, 3, 0x00ffff, 1);
+            particle.setDepth(100);
+
+            const distance = Phaser.Math.Between(20, 40);
+            this.scene.tweens.add({
+                targets: particle,
+                x: x + Math.cos(angle) * distance,
+                y: y + Math.sin(angle) * distance,
+                alpha: 0,
+                scale: 0.3,
+                duration: 500, // Increased from 200ms to 500ms
+                ease: 'Power2',
+                onComplete: () => particle.destroy()
+            });
+        }
+
+        // Glowing aura around player (pulsing effect)
+        const aura = this.scene.add.circle(x, y, 18, 0x00ffff, 0.4);
+        aura.setDepth(99);
+
+        this.scene.tweens.add({
+            targets: aura,
+            scale: 1.8,
+            alpha: 0,
+            duration: 500, // Increased from 200ms to 500ms
+            ease: 'Power2',
+            onComplete: () => aura.destroy()
         });
     }
 
@@ -1352,6 +1453,15 @@ export default class AbilitySystem {
         // Apply red tint to player
         player.setTint(0xff0000);
 
+        // Apply red tint to all summoned MiniArchers
+        if (this.scene.miniArchers && this.scene.miniArchers.length > 0) {
+            this.scene.miniArchers.forEach(miniArcher => {
+                if (miniArcher && miniArcher.active) {
+                    miniArcher.setTint(0xff0000);
+                }
+            });
+        }
+
         // Schedule berserker end
         this.scene.time.delayedCall(this.abilities.berserker.duration, () => {
             this.deactivateBerserker();
@@ -1364,11 +1474,15 @@ export default class AbilitySystem {
 
     /**
      * Summon ability (F) - Spawn 5 mini archers that follow and fight
+     * They appear one by one with portal effects
      */
     summon(time) {
         if (!this.canUseAbility('summon', time)) return false;
 
         const player = this.scene.player;
+
+        // Create initial activation effect at center
+        this.createSummonActivationEffect(player.x, player.y);
 
         // Import MiniArcher class
         import('../entities/MiniArcher.js').then((module) => {
@@ -1378,30 +1492,42 @@ export default class AbilitySystem {
             const archerCount = 5;
             const spawnRadius = 60; // Distance from player
             const angleStep = (Math.PI * 2) / archerCount;
+            const spawnDelay = 120; // ms between each spawn
 
+            // Create mini archers one by one with delays
             for (let i = 0; i < archerCount; i++) {
-                const angle = angleStep * i;
-                const spawnX = player.x + Math.cos(angle) * spawnRadius;
-                const spawnY = player.y + Math.sin(angle) * spawnRadius;
+                this.scene.time.delayedCall(i * spawnDelay, () => {
+                    const angle = angleStep * i;
+                    const spawnX = player.x + Math.cos(angle) * spawnRadius;
+                    const spawnY = player.y + Math.sin(angle) * spawnRadius;
 
-                // Calculate follow offset (they'll maintain this relative position)
-                const offsetX = Math.cos(angle) * 50;
-                const offsetY = Math.sin(angle) * 50;
+                    // Calculate follow offset (they'll maintain this relative position)
+                    const offsetX = Math.cos(angle) * 50;
+                    const offsetY = Math.sin(angle) * 50;
 
-                // Create mini archer
-                const miniArcher = new MiniArcher(this.scene, spawnX, spawnY, offsetX, offsetY);
+                    // Create portal effect at spawn position
+                    this.createPortalSpawnEffect(spawnX, spawnY);
 
-                // Store in scene for updates (we'll create the group if it doesn't exist)
-                if (!this.scene.miniArchers) {
-                    this.scene.miniArchers = [];
-                }
-                this.scene.miniArchers.push(miniArcher);
+                    // Delay archer creation slightly after portal appears
+                    this.scene.time.delayedCall(150, () => {
+                        // Create mini archer
+                        const miniArcher = new MiniArcher(this.scene, spawnX, spawnY, offsetX, offsetY);
+
+                        // Store in scene for updates
+                        if (!this.scene.miniArchers) {
+                            this.scene.miniArchers = [];
+                        }
+                        this.scene.miniArchers.push(miniArcher);
+
+                        // Apply red tint if berserker mode is active
+                        if (this.berserkerActive) {
+                            miniArcher.setTint(0xff0000);
+                        }
+
+                        console.log(`🏹 Mini archer ${i + 1}/5 spawned!`);
+                    });
+                });
             }
-
-            // Create activation effect
-            this.createSummonActivationEffect(player.x, player.y);
-
-            console.log('🏹 Summoned 5 mini archers!');
         });
 
         this.abilities.summon.lastUsed = time;
@@ -1429,6 +1555,15 @@ export default class AbilitySystem {
 
         // Clear player tint
         player.clearTint();
+
+        // Clear tint from all summoned MiniArchers
+        if (this.scene.miniArchers && this.scene.miniArchers.length > 0) {
+            this.scene.miniArchers.forEach(miniArcher => {
+                if (miniArcher && miniArcher.active) {
+                    miniArcher.clearTint();
+                }
+            });
+        }
 
         // Destroy berserker aura
         if (this.berserkerGraphic) {
@@ -1657,5 +1792,165 @@ export default class AbilitySystem {
 
         // Camera shake
         this.scene.cameras.main.shake(200, 0.004);
+    }
+
+    /**
+     * Create portal spawn effect for individual mini archers
+     */
+    createPortalSpawnEffect(x, y) {
+        // Portal ring that expands from center
+        const portalRing = this.scene.add.graphics();
+        portalRing.lineStyle(3, 0xffcc00, 0.9);
+        portalRing.strokeCircle(x, y, 5);
+
+        this.scene.tweens.add({
+            targets: portalRing,
+            scaleX: 3,
+            scaleY: 3,
+            alpha: 0,
+            duration: 300,
+            ease: 'Power2',
+            onComplete: () => portalRing.destroy()
+        });
+
+        // Bright flash at spawn point
+        const flash = this.scene.add.circle(x, y, 8, 0xffffff, 1);
+
+        this.scene.tweens.add({
+            targets: flash,
+            scale: 2.5,
+            alpha: 0,
+            duration: 250,
+            ease: 'Power3',
+            onComplete: () => flash.destroy()
+        });
+
+        // Swirling particles around spawn point
+        const particleCount = 12;
+        for (let i = 0; i < particleCount; i++) {
+            const angle = (Math.PI * 2 * i) / particleCount;
+            const colors = [0xffff00, 0xffcc00, 0xffaa00];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+
+            // Start particles at outer radius, spiral inward
+            const startRadius = 30;
+            const particle = this.scene.add.circle(
+                x + Math.cos(angle) * startRadius,
+                y + Math.sin(angle) * startRadius,
+                3,
+                color,
+                0.9
+            );
+
+            // Spiral particles inward toward center
+            this.scene.tweens.add({
+                targets: particle,
+                x: x,
+                y: y,
+                alpha: 0,
+                scale: 0.2,
+                duration: 300,
+                ease: 'Power2',
+                onComplete: () => particle.destroy()
+            });
+        }
+
+        // Rising particles (from ground up)
+        for (let i = 0; i < 8; i++) {
+            this.scene.time.delayedCall(i * 30, () => {
+                const offsetX = (Math.random() - 0.5) * 20;
+                const particle = this.scene.add.circle(
+                    x + offsetX,
+                    y + 10,
+                    2,
+                    0xffcc00,
+                    0.8
+                );
+
+                this.scene.tweens.add({
+                    targets: particle,
+                    y: y - 30,
+                    alpha: 0,
+                    duration: 400,
+                    ease: 'Power2',
+                    onComplete: () => particle.destroy()
+                });
+            });
+        }
+
+        // Small camera shake
+        this.scene.cameras.main.shake(80, 0.002);
+    }
+
+    /**
+     * Show tutorial message when player releases E too quickly
+     */
+    showHoldETutorial() {
+        // Only show once per game
+        if (this.hasShownHoldETutorial) return;
+        this.hasShownHoldETutorial = true;
+
+        // Don't spam the message - destroy previous if exists
+        if (this.holdETutorialText) {
+            this.holdETutorialText.destroy();
+        }
+
+        // Create tutorial text
+        this.holdETutorialText = this.scene.add.text(
+            this.scene.cameras.main.width / 2,
+            200,
+            'HOLD E TO CHARGE!',
+            {
+                fontSize: '42px',
+                fontFamily: 'Arial',
+                color: '#ffff00',
+                stroke: '#000000',
+                strokeThickness: 6,
+                fontStyle: 'bold'
+            }
+        );
+        this.holdETutorialText.setOrigin(0.5);
+        this.holdETutorialText.setScrollFactor(0);
+        this.holdETutorialText.setDepth(9999);
+        this.holdETutorialText.setAlpha(0);
+
+        // Fade in animation
+        this.scene.tweens.add({
+            targets: this.holdETutorialText,
+            alpha: 1,
+            duration: 200,
+            ease: 'Power2'
+        });
+
+        // Pulse effect
+        this.scene.tweens.add({
+            targets: this.holdETutorialText,
+            scaleX: 1.1,
+            scaleY: 1.1,
+            duration: 400,
+            yoyo: true,
+            repeat: 2,
+            ease: 'Sine.easeInOut'
+        });
+
+        // Fade out and destroy after 2.5 seconds
+        this.scene.time.delayedCall(2500, () => {
+            if (this.holdETutorialText) {
+                this.scene.tweens.add({
+                    targets: this.holdETutorialText,
+                    alpha: 0,
+                    duration: 300,
+                    ease: 'Power2',
+                    onComplete: () => {
+                        if (this.holdETutorialText) {
+                            this.holdETutorialText.destroy();
+                            this.holdETutorialText = null;
+                        }
+                    }
+                });
+            }
+        });
+
+        console.log('💡 Tutorial: HOLD E TO CHARGE shown');
     }
 }

@@ -9,7 +9,7 @@ export default class AutoFireSystem {
         this.scene = scene;
         this.lastFireTime = 0;
         this.fireRate = 500; // ms between shots
-        this.range = 350; // pixels - max range to fire (same for enemies and huts)
+        this.range = 320; // pixels - range for auto-fire
         this.enabled = true;
         this.isFiring = false; // Track if currently in a firing animation
     }
@@ -25,10 +25,7 @@ export default class AutoFireSystem {
 
         // Find nearest target (enemy or hut)
         const target = this.findNearestTarget();
-        if (!target) {
-            // console.log('🎯 No targets found');
-            return;
-        }
+        if (!target) return;
 
         // Check if in range
         const distance = Phaser.Math.Distance.Between(
@@ -38,13 +35,9 @@ export default class AutoFireSystem {
             target.y
         );
 
-        if (distance > this.range) {
-            // console.log(`🎯 Target too far: ${Math.round(distance)}px > ${this.range}px`);
-            return;
-        }
+        if (distance > this.range) return;
 
         // Fire!
-        // console.log('🏹 FIRING at target!', distance);
         this.fireProjectile(target);
         this.lastFireTime = time;
     }
@@ -79,8 +72,6 @@ export default class AutoFireSystem {
         const playerX = this.scene.player.x;
         const playerY = this.scene.player.y;
         const angle = Phaser.Math.Angle.Between(playerX, playerY, targetX, targetY);
-
-        console.log(`🎯 Auto-spawn: Recalculated angle = ${(angle * 180 / Math.PI).toFixed(1)}°`);
 
         // Calculate bow offset based on shooting direction
         // This makes arrows spawn from the visual bow position instead of player center
@@ -122,11 +113,8 @@ export default class AutoFireSystem {
         // Rotate arrow to point in direction of movement
         projectile.rotation = angle;
 
-        // Add glow effect to make it more visible
-        projectile.setBlendMode(Phaser.BlendModes.ADD);
-
-        // Raycast will detect collisions automatically!
-        console.log('🏹 Arrow spawned with raycast collision!');
+        // Use normal blend mode (no glow)
+        projectile.setBlendMode(Phaser.BlendModes.NORMAL);
     }
 
     /**
@@ -279,35 +267,40 @@ export default class AutoFireSystem {
             flipX = false;
         }
 
-        console.log(`🎯 Auto-fire angle: ${degrees.toFixed(1)}° → ${animKey} (frames ${frameStart}-${frameEnd}, flip=${flipX})`);
-
         return { frameStart, frameEnd, animKey, flipX };
     }
 
     /**
      * Find nearest target - prioritizes enemies first, then goblin huts
+     * IMPORTANT: Only returns targets that are WITHIN RANGE
      */
     findNearestTarget() {
-        // First, try to find enemies (priority)
+        // First, try to find enemies WITHIN RANGE (priority)
         const enemy = this.findNearestEnemy();
         if (enemy) {
-            console.log('🎯 AutoFire: Found enemy target');
-            return enemy;
+            const distToEnemy = Phaser.Math.Distance.Between(
+                this.scene.player.x,
+                this.scene.player.y,
+                enemy.x,
+                enemy.y
+            );
+
+            // If enemy is within range, target it
+            if (distToEnemy <= this.range) {
+                return enemy;
+            }
+
+            // Enemy exists but is too far - look for huts instead
         }
 
-        // If no enemies, target nearest goblin hut
+        // No enemies in range, target nearest goblin hut
         const hut = this.findNearestHut();
-        if (hut) {
-            console.log('🏠 AutoFire: Found hut target (no enemies available)');
-        } else {
-            console.log('❌ AutoFire: No targets found');
-        }
         return hut;
     }
 
     findNearestEnemy() {
         const enemies = this.scene.enemies.getChildren()
-            .filter(e => !e.isDying && e.active);
+            .filter(e => e.active && !e.isDying && e.health > 0);
 
         if (enemies.length === 0) return null;
 

@@ -30,6 +30,17 @@ export default class GoblinHut extends Phaser.GameObjects.Sprite {
         this.lastSpawnTime = 0;
         this.nextSpawnTime = scene.time.now + this.spawnInterval;
 
+        // Attack properties (ballista shooting)
+        this.attackCooldown = 3000; // 3 seconds between shots
+        this.attackRange = 400; // Detection range (slightly longer than player attack range ~350)
+        this.lastAttackTime = 0;
+        this.attackChargeProgress = 0; // 0 to 1
+        this.ballistaArrowSpeed = 220; // Faster but still dodgeable
+        this.ballistaArrowScale = 1.2; // Slightly bigger than player arrow (was 1.6)
+        this.ballistaArrowDamage = 30; // High damage
+        this.ballistaCritChance = 0.3; // 30% critical hit chance
+        this.ballistaCritMultiplier = 2.0; // 2x damage on crit
+
         // Set up physics body with reduced hitbox
         this.body.setImmovable(true);
         this.setScale(1.0);
@@ -74,7 +85,15 @@ export default class GoblinHut extends Phaser.GameObjects.Sprite {
 
             // Create guard enemy
             const guard = new Enemy(this.scene, guardX, guardY, type);
-            guard.setAsGuard(this.x, this.y); // Mark as guard at hut position
+
+            // 5% chance to spawn as a HUNTER (long-range detection)
+            const isHunter = Math.random() < 0.05;
+            if (isHunter) {
+                guard.setAsHunter(this.x, this.y);
+            } else {
+                guard.setAsGuard(this.x, this.y); // Normal guard
+            }
+
             this.scene.enemies.add(guard);
 
             const guardName = type === 'lancer' ? '🗡️ Lancer' : '👹 Goblin';
@@ -110,6 +129,39 @@ export default class GoblinHut extends Phaser.GameObjects.Sprite {
 
         // Track last particle spawn time
         this.lastParticleTime = 0;
+
+        // Create attack charge bar (above spawn progress bar)
+        this.createAttackChargeBar();
+    }
+
+    /**
+     * Create the attack charge bar (ballista charging)
+     */
+    createAttackChargeBar() {
+        const barWidth = 100;
+        const barHeight = 10;
+        const barX = this.x - barWidth / 2;
+        const barY = this.y - this.height / 2 - 42; // Above the spawn bar
+
+        // Background bar
+        this.attackBarBg = this.scene.add.graphics();
+        this.attackBarBg.setDepth(100);
+
+        // Progress bar (red/orange for attack)
+        this.attackBar = this.scene.add.graphics();
+        this.attackBar.setDepth(101);
+
+        // Glow effect for attack bar
+        this.attackBarGlow = this.scene.add.graphics();
+        this.attackBarGlow.setDepth(99);
+
+        // Store bar properties for updates
+        this.attackBarProps = {
+            x: barX,
+            y: barY,
+            width: barWidth,
+            height: barHeight
+        };
     }
 
     updateProgressBar() {
@@ -193,6 +245,75 @@ export default class GoblinHut extends Phaser.GameObjects.Sprite {
         if (progress > 0.8 && now - this.lastParticleTime > 200) {
             this.emitProgressParticles(barX + this.barProps.width * progress, barY);
             this.lastParticleTime = now;
+        }
+    }
+
+    /**
+     * Update attack charge bar
+     */
+    updateAttackChargeBar() {
+        const progress = this.attackChargeProgress;
+
+        // Clear graphics
+        this.attackBarGlow.clear();
+        this.attackBarBg.clear();
+        this.attackBar.clear();
+
+        const barX = this.attackBarProps.x;
+        const barY = this.attackBarProps.y;
+
+        // Dynamic color based on progress
+        let barColor, glowColor;
+        if (progress < 0.5) {
+            // 0-50%: Orange
+            barColor = 0xff8800;
+            glowColor = 0xffaa00;
+        } else if (progress < 0.9) {
+            // 50-90%: Red-orange
+            barColor = 0xff4400;
+            glowColor = 0xff6600;
+        } else {
+            // 90-100%: Bright red (ready to fire!)
+            barColor = 0xff0000;
+            glowColor = 0xff3333;
+        }
+
+        // Draw glow effect when charging
+        if (progress > 0.3) {
+            const glowIntensity = (progress - 0.3) / 0.7; // 0 to 1
+            this.attackBarGlow.fillStyle(glowColor, 0.4 * glowIntensity);
+            this.attackBarGlow.fillRect(
+                barX - 3,
+                barY - 3,
+                (this.attackBarProps.width + 6) * progress,
+                this.attackBarProps.height + 6
+            );
+        }
+
+        // Draw background with border
+        this.attackBarBg.lineStyle(2, 0x444444, 1);
+        this.attackBarBg.fillStyle(0x000000, 0.8);
+        this.attackBarBg.fillRect(barX, barY, this.attackBarProps.width, this.attackBarProps.height);
+        this.attackBarBg.strokeRect(barX, barY, this.attackBarProps.width, this.attackBarProps.height);
+
+        // Draw progress bar
+        this.attackBar.fillStyle(barColor, 0.95);
+        this.attackBar.fillRect(
+            barX + 2,
+            barY + 2,
+            (this.attackBarProps.width - 4) * progress,
+            this.attackBarProps.height - 4
+        );
+
+        // Add highlight on top when >50% charged
+        if (progress > 0.5) {
+            this.attackBar.fillStyle(0xffffff, 0.4);
+            this.attackBar.fillRect(
+                barX + 2,
+                barY + 2,
+                (this.attackBarProps.width - 4) * progress,
+                2 // Thin highlight
+            );
         }
     }
 
@@ -291,6 +412,15 @@ export default class GoblinHut extends Phaser.GameObjects.Sprite {
             }
             if (this.progressBarGlow) {
                 this.progressBarGlow.destroy();
+            }
+            if (this.attackBar) {
+                this.attackBar.destroy();
+            }
+            if (this.attackBarBg) {
+                this.attackBarBg.destroy();
+            }
+            if (this.attackBarGlow) {
+                this.attackBarGlow.destroy();
             }
 
             // Destroy the hut sprite after a short delay (for explosion to be visible)
@@ -530,9 +660,14 @@ export default class GoblinHut extends Phaser.GameObjects.Sprite {
      */
     spawnGoblins() {
         for (let i = 0; i < this.goblinsPerSpawn; i++) {
-            // Spawn enemies in a circle around the hut
-            const angle = (Math.PI * 2 / this.goblinsPerSpawn) * i;
-            const distance = 100; // Distance from hut
+            // Spawn enemies in a circle around the hut with random variation
+            const baseAngle = (Math.PI * 2 / this.goblinsPerSpawn) * i;
+            // Add random angle offset of ±45 degrees to prevent exact overlap
+            const angleOffset = (Math.random() - 0.5) * (Math.PI / 2);
+            const angle = baseAngle + angleOffset;
+
+            // Vary the distance slightly (80-120 pixels)
+            const distance = 80 + Math.random() * 40;
             const spawnX = this.x + Math.cos(angle) * distance;
             const spawnY = this.y + Math.sin(angle) * distance;
 
@@ -541,7 +676,15 @@ export default class GoblinHut extends Phaser.GameObjects.Sprite {
 
             // Create enemy
             const enemy = new Enemy(this.scene, spawnX, spawnY, enemyType);
-            enemy.setAsGuard(this.x, this.y); // Mark as guard at hut position
+
+            // 5% chance to spawn as a HUNTER (long-range detection)
+            const isHunter = Math.random() < 0.05;
+            if (isHunter) {
+                enemy.setAsHunter(this.x, this.y);
+            } else {
+                enemy.setAsGuard(this.x, this.y); // Normal guard
+            }
+
             this.scene.enemies.add(enemy);
 
             const enemyName = enemyType === 'lancer' ? '🗡️ Lancer' : '👹 Goblin';
@@ -550,6 +693,86 @@ export default class GoblinHut extends Phaser.GameObjects.Sprite {
 
         // Reset spawn timer
         this.nextSpawnTime = this.scene.time.now + this.spawnInterval;
+    }
+
+    /**
+     * Fire a ballista arrow at the player
+     */
+    fireBallistaArrow() {
+        // Import Projectile class
+        const Projectile = this.scene.projectiles.classType;
+
+        // Calculate angle to player
+        const player = this.scene.player;
+        if (!player || !player.active) return;
+
+        const angle = Phaser.Math.Angle.Between(this.x, this.y, player.x, player.y);
+
+        // Create ballista arrow at hut position
+        const projectile = new Projectile(
+            this.scene,
+            this.x,
+            this.y,
+            'arrow'
+        );
+
+        // Add to group for tracking
+        this.scene.projectiles.add(projectile);
+
+        // Set frame 0 (flying arrow)
+        projectile.setFrame(0);
+
+        // Check for critical hit
+        const isCritical = Math.random() < this.ballistaCritChance;
+        const finalDamage = isCritical ? this.ballistaArrowDamage * this.ballistaCritMultiplier : this.ballistaArrowDamage;
+
+        // Make it thicker and faster
+        projectile.setScale(this.ballistaArrowScale);
+        projectile.damage = finalDamage;
+        projectile.isCritical = isCritical;
+
+        // Set velocity
+        const velocityX = Math.cos(angle) * this.ballistaArrowSpeed;
+        const velocityY = Math.sin(angle) * this.ballistaArrowSpeed;
+        projectile.setVelocity(velocityX, velocityY);
+
+        // Rotate arrow to point in direction of movement
+        projectile.rotation = angle;
+
+        // Mark as enemy projectile (so it doesn't hit enemies)
+        projectile.isEnemyProjectile = true;
+
+        // Apply distinct visual based on critical or normal
+        if (isCritical) {
+            // CRITICAL: Bigger size with glowing arrow effect
+            projectile.setScale(this.ballistaArrowScale * 1.3); // 30% bigger for crits
+
+            // Make the arrow itself glow white
+            projectile.setTint(0xFFFFFF);
+            projectile.setBlendMode(Phaser.BlendModes.ADD); // Glow effect
+
+            // Add pulsing animation to the arrow itself
+            this.scene.tweens.add({
+                targets: projectile,
+                alpha: { from: 1.0, to: 0.7 },
+                duration: 200,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+        } else {
+            // NORMAL: Standard size, no effects
+            projectile.setScale(this.ballistaArrowScale);
+            projectile.clearTint();
+            projectile.setBlendMode(Phaser.BlendModes.NORMAL);
+        }
+
+        const critText = isCritical ? ' 💥 CRITICAL!' : '';
+        console.log(`🏹 GoblinHut fired ballista arrow at player (damage: ${finalDamage})${critText}`);
+
+        // Reset attack charge
+        this.attackChargeProgress = 0;
+        this.lastAttackTime = this.scene.time.now;
     }
 
     /**
@@ -566,6 +789,44 @@ export default class GoblinHut extends Phaser.GameObjects.Sprite {
 
         // Update progress bar
         this.updateProgressBar();
+
+        // Update attack system
+        this.updateAttackSystem(time);
+
+        // Update attack charge bar
+        this.updateAttackChargeBar();
+    }
+
+    /**
+     * Update attack system - detect player and charge ballista
+     */
+    updateAttackSystem(time) {
+        const player = this.scene.player;
+        if (!player || !player.active) {
+            // Reset charge if player is gone
+            this.attackChargeProgress = 0;
+            return;
+        }
+
+        // Calculate distance to player
+        const distance = Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y);
+
+        // Check if player is in range
+        if (distance <= this.attackRange) {
+            // Player in range, charge the attack
+            const timeSinceLastAttack = time - this.lastAttackTime;
+
+            // Calculate charge progress (0 to 1)
+            this.attackChargeProgress = Math.min(timeSinceLastAttack / this.attackCooldown, 1.0);
+
+            // Fire when fully charged
+            if (this.attackChargeProgress >= 1.0) {
+                this.fireBallistaArrow();
+            }
+        } else {
+            // Player out of range, reset charge slowly
+            this.attackChargeProgress = Math.max(0, this.attackChargeProgress - 0.02);
+        }
     }
 
     /**
@@ -574,6 +835,10 @@ export default class GoblinHut extends Phaser.GameObjects.Sprite {
     destroy() {
         if (this.progressBar) this.progressBar.destroy();
         if (this.progressBarBg) this.progressBarBg.destroy();
+        if (this.progressBarGlow) this.progressBarGlow.destroy();
+        if (this.attackBar) this.attackBar.destroy();
+        if (this.attackBarBg) this.attackBarBg.destroy();
+        if (this.attackBarGlow) this.attackBarGlow.destroy();
 
         console.log('💥 GoblinHut destroyed!');
         super.destroy();

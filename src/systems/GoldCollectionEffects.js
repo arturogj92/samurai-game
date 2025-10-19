@@ -210,8 +210,11 @@ export default class GoldCollectionEffects {
      * Trigger camera shake effect
      */
     triggerScreenShake(comboCount) {
-        const intensity = 0.003 + (comboCount * 0.001); // Stronger with combo
-        const duration = 150 + (comboCount * 20);
+        // Reduced shake intensity for less aggressive feel
+        const baseIntensity = 0.002; // Reduced from 0.003
+        const comboBonus = comboCount * 0.0003; // Reduced from 0.001
+        const intensity = Math.min(baseIntensity + comboBonus, 0.008); // Cap at 0.008
+        const duration = 100 + (comboCount * 10); // Reduced from 150 + (comboCount * 20)
 
         this.scene.cameras.main.shake(duration, intensity);
     }

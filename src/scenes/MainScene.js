@@ -8,7 +8,6 @@ import Bush from '../entities/Bush';
 import Rock from '../entities/Rock';
 import Sheep from '../entities/Sheep';
 import AutoFireSystem from '../systems/AutoFireSystem';
-import MouseFireSystem from '../systems/MouseFireSystem';
 import EnemySpawnSystem from '../systems/EnemySpawnSystem';
 import CollisionSystem from '../systems/CollisionSystem';
 import AbilitySystem from '../systems/AbilitySystem';
@@ -51,6 +50,10 @@ export default class MainScene extends Phaser.Scene {
             purchasesThisWave: 0
         };
 
+        // Game over/victory flags
+        this.gameOverShown = false;
+        this.victoryShown = false;
+
         // Groups for game objects
         this.enemies = this.physics.add.group({
             classType: Enemy,
@@ -77,7 +80,6 @@ export default class MainScene extends Phaser.Scene {
 
         // Initialize modular systems
         this.autoFireSystem = new AutoFireSystem(this);
-        this.mouseFireSystem = new MouseFireSystem(this);
         this.enemySpawnSystem = new EnemySpawnSystem(this);
         this.enemySpawnSystem.disable(); // Disable automatic spawning - enemies spawn from huts only
         this.collisionSystem = new CollisionSystem(this);
@@ -139,35 +141,51 @@ export default class MainScene extends Phaser.Scene {
     }
 
     createGoblinHuts() {
-        // Create 2 goblin huts near the player start position (center of world)
+        // Create 5 goblin huts spread out around the player start position (center of world) - Level 1
         // Player starts at WORLD.width/2, WORLD.height/2
         const centerX = WORLD.width / 2;
         const centerY = WORLD.height / 2;
 
-        // Hut 1: Upper-left from player (closer for targeting range)
-        const hut1 = new GoblinHut(this, centerX - 200, centerY - 200);
+        // Create 5 huts in a spread pattern around the player (farther apart)
+        // Hut 1: Upper-left from player
+        const hut1 = new GoblinHut(this, centerX - 400, centerY - 400);
 
-        // Hut 2: Lower-right from player (closer for targeting range)
-        const hut2 = new GoblinHut(this, centerX + 200, centerY + 200);
+        // Hut 2: Upper-right from player
+        const hut2 = new GoblinHut(this, centerX + 400, centerY - 400);
+
+        // Hut 3: Lower-left from player
+        const hut3 = new GoblinHut(this, centerX - 400, centerY + 400);
+
+        // Hut 4: Lower-right from player
+        const hut4 = new GoblinHut(this, centerX + 400, centerY + 400);
+
+        // Hut 5: Directly above player (farther out)
+        const hut5 = new GoblinHut(this, centerX, centerY - 500);
 
         this.goblinHuts.add(hut1);
         this.goblinHuts.add(hut2);
+        this.goblinHuts.add(hut3);
+        this.goblinHuts.add(hut4);
+        this.goblinHuts.add(hut5);
 
-        console.log('🏠 Created 2 goblin huts near player at', centerX, centerY);
+        console.log('🏠 Created 5 goblin huts spread around player at', centerX, centerY);
     }
 
     createRandomTrees() {
         const centerX = WORLD.width / 2;
         const centerY = WORLD.height / 2;
 
-        // Hut positions (same as in createGoblinHuts)
+        // Hut positions (MUST match createGoblinHuts exactly!)
         const hutPositions = [
-            { x: centerX - 200, y: centerY - 200 },
-            { x: centerX + 200, y: centerY + 200 }
+            { x: centerX - 400, y: centerY - 400 }, // Hut 1: Upper-left
+            { x: centerX + 400, y: centerY - 400 }, // Hut 2: Upper-right
+            { x: centerX - 400, y: centerY + 400 }, // Hut 3: Lower-left
+            { x: centerX + 400, y: centerY + 400 }, // Hut 4: Lower-right
+            { x: centerX, y: centerY - 500 }        // Hut 5: Directly above
         ];
 
         // Collision radii
-        const HUT_COLLISION_RADIUS = 250; // Don't spawn trees within 250px of huts
+        const HUT_COLLISION_RADIUS = 300; // Don't spawn trees within 300px of huts (increased from 250px)
         const PLAYER_COLLISION_RADIUS = 250; // Don't spawn trees too close to player start
         const TREE_MIN_DISTANCE = 120; // Minimum distance between trees (reduced for better density)
 
@@ -231,14 +249,17 @@ export default class MainScene extends Phaser.Scene {
         const centerX = WORLD.width / 2;
         const centerY = WORLD.height / 2;
 
-        // Hut positions (same as in createGoblinHuts)
+        // Hut positions (MUST match createGoblinHuts exactly!)
         const hutPositions = [
-            { x: centerX - 200, y: centerY - 200 },
-            { x: centerX + 200, y: centerY + 200 }
+            { x: centerX - 400, y: centerY - 400 }, // Hut 1: Upper-left
+            { x: centerX + 400, y: centerY - 400 }, // Hut 2: Upper-right
+            { x: centerX - 400, y: centerY + 400 }, // Hut 3: Lower-left
+            { x: centerX + 400, y: centerY + 400 }, // Hut 4: Lower-right
+            { x: centerX, y: centerY - 500 }        // Hut 5: Directly above
         ];
 
         // Collision radii
-        const HUT_COLLISION_RADIUS = 200; // Don't spawn bushes within 200px of huts
+        const HUT_COLLISION_RADIUS = 250; // Don't spawn bushes within 250px of huts (increased from 200px)
         const PLAYER_COLLISION_RADIUS = 200; // Don't spawn bushes too close to player start
         const TREE_MIN_DISTANCE = 80; // Minimum distance from trees
         const BUSH_MIN_DISTANCE = 60; // Minimum distance between bushes
@@ -472,7 +493,7 @@ export default class MainScene extends Phaser.Scene {
             // Check if dead
             if (this.player.health <= 0) {
                 this.gameState.playing = false;
-                // console.log('💀 Player died!');
+                this.showGameOver();
             }
         };
 
@@ -576,18 +597,6 @@ export default class MainScene extends Phaser.Scene {
             T: Phaser.Input.Keyboard.KeyCodes.T, // Shop
             B: Phaser.Input.Keyboard.KeyCodes.B, // Toggle hitbox debug
             SPACE: Phaser.Input.Keyboard.KeyCodes.SPACE // DEBUG: Manual fire arrow
-        });
-
-        // Mouse controls - shoot arrows on click
-        this.input.on('pointerdown', (pointer) => {
-            if (!this.gameState.playing) return;
-
-            // Get world coordinates from camera (pointer gives screen coords)
-            const worldX = pointer.worldX;
-            const worldY = pointer.worldY;
-
-            // Fire arrow toward mouse position
-            this.mouseFireSystem.fireAtPosition(worldX, worldY, this.time.now);
         });
     }
 
@@ -698,6 +707,9 @@ export default class MainScene extends Phaser.Scene {
         if (this.goldUI) {
             this.goldUI.update();
         }
+
+        // Check for victory condition
+        this.checkVictoryCondition();
     }
 
     handleAbilityInput(time) {
@@ -833,5 +845,225 @@ export default class MainScene extends Phaser.Scene {
         if (angle >= -67.5 && angle < -22.5) return 'north-east';    // Up-Right
 
         return 'south'; // fallback
+    }
+
+    checkVictoryCondition() {
+        // Prevent multiple checks
+        if (this.victoryShown || this.gameOverShown) return;
+
+        // Count alive enemies
+        const aliveEnemies = this.enemies.getChildren()
+            .filter(e => e.active && !e.isDying && e.health > 0);
+
+        // Count alive huts
+        const aliveHuts = this.goblinHuts.getChildren()
+            .filter(h => h.active && !h.isDestroyed);
+
+        // Victory if all enemies AND huts are destroyed
+        if (aliveEnemies.length === 0 && aliveHuts.length === 0) {
+            this.showVictory();
+        }
+    }
+
+    showVictory() {
+        // Prevent multiple victory screens
+        if (this.victoryShown) return;
+        this.victoryShown = true;
+        this.gameState.playing = false;
+
+        console.log('🎉 VICTORY!');
+
+        // Create semi-transparent black overlay
+        const overlay = this.add.rectangle(
+            this.cameras.main.width / 2,
+            this.cameras.main.height / 2,
+            this.cameras.main.width,
+            this.cameras.main.height,
+            0x000000,
+            0.7
+        );
+        overlay.setScrollFactor(0);
+        overlay.setDepth(10000);
+
+        // YOU WIN text
+        const victoryText = this.add.text(
+            this.cameras.main.width / 2,
+            150,
+            'YOU WIN!',
+            {
+                fontSize: '72px',
+                fontFamily: 'Arial',
+                color: '#00ff00',
+                stroke: '#000000',
+                strokeThickness: 8
+            }
+        );
+        victoryText.setOrigin(0.5);
+        victoryText.setScrollFactor(0);
+        victoryText.setDepth(10001);
+
+        // Calculate survival time
+        const survivalTime = Math.floor(this.time.now / 1000);
+        const minutes = Math.floor(survivalTime / 60);
+        const seconds = survivalTime % 60;
+
+        // Statistics text
+        const statsText = this.add.text(
+            this.cameras.main.width / 2,
+            280,
+            `🏆 VICTORY STATS 🏆
+
+Score: ${this.gameState.score}
+Enemies Killed: ${this.gameState.enemiesKilled}
+Gold Collected: ${this.gameState.resources.gold}
+Time: ${minutes}m ${seconds}s`,
+            {
+                fontSize: '22px',
+                fontFamily: 'Arial',
+                color: '#ffffff',
+                align: 'center',
+                lineSpacing: 8
+            }
+        );
+        statsText.setOrigin(0.5);
+        statsText.setScrollFactor(0);
+        statsText.setDepth(10001);
+
+        // Restart button background
+        const buttonBg = this.add.rectangle(
+            this.cameras.main.width / 2,
+            450,
+            220,
+            60,
+            0x00aa00
+        );
+        buttonBg.setScrollFactor(0);
+        buttonBg.setDepth(10002);
+        buttonBg.setInteractive({ useHandCursor: true });
+
+        // Restart button text
+        const buttonText = this.add.text(
+            this.cameras.main.width / 2,
+            450,
+            'PLAY AGAIN',
+            {
+                fontSize: '28px',
+                fontFamily: 'Arial',
+                color: '#ffffff',
+                fontStyle: 'bold'
+            }
+        );
+        buttonText.setOrigin(0.5);
+        buttonText.setScrollFactor(0);
+        buttonText.setDepth(10003);
+
+        // Button hover effect
+        buttonBg.on('pointerover', () => {
+            buttonBg.setFillStyle(0x00ff00);
+        });
+
+        buttonBg.on('pointerout', () => {
+            buttonBg.setFillStyle(0x00aa00);
+        });
+
+        // Button click - restart game
+        buttonBg.on('pointerdown', () => {
+            this.scene.restart();
+        });
+    }
+
+    showGameOver() {
+        // Prevent multiple game over screens
+        if (this.gameOverShown) return;
+        this.gameOverShown = true;
+
+        console.log('💀 Game Over!');
+
+        // Create semi-transparent black overlay
+        const overlay = this.add.rectangle(
+            this.cameras.main.width / 2,
+            this.cameras.main.height / 2,
+            this.cameras.main.width,
+            this.cameras.main.height,
+            0x000000,
+            0.7
+        );
+        overlay.setScrollFactor(0); // Fixed to camera
+        overlay.setDepth(10000); // MUY por encima de todo
+
+        // Game Over text
+        const gameOverText = this.add.text(
+            this.cameras.main.width / 2,
+            150,
+            'GAME OVER',
+            {
+                fontSize: '64px',
+                fontFamily: 'Arial',
+                color: '#ff0000',
+                stroke: '#000000',
+                strokeThickness: 8
+            }
+        );
+        gameOverText.setOrigin(0.5);
+        gameOverText.setScrollFactor(0);
+        gameOverText.setDepth(10001);
+
+        // Score text
+        const scoreText = this.add.text(
+            this.cameras.main.width / 2,
+            280,
+            `Score: ${this.gameState.score}\nEnemies Killed: ${this.gameState.enemiesKilled}`,
+            {
+                fontSize: '24px',
+                fontFamily: 'Arial',
+                color: '#ffffff',
+                align: 'center'
+            }
+        );
+        scoreText.setOrigin(0.5);
+        scoreText.setScrollFactor(0);
+        scoreText.setDepth(10001);
+
+        // Restart button background
+        const buttonBg = this.add.rectangle(
+            this.cameras.main.width / 2,
+            380,
+            200,
+            60,
+            0x00aa00
+        );
+        buttonBg.setScrollFactor(0);
+        buttonBg.setDepth(10002);
+        buttonBg.setInteractive({ useHandCursor: true });
+
+        // Restart button text
+        const buttonText = this.add.text(
+            this.cameras.main.width / 2,
+            380,
+            'RESTART',
+            {
+                fontSize: '32px',
+                fontFamily: 'Arial',
+                color: '#ffffff',
+                fontStyle: 'bold'
+            }
+        );
+        buttonText.setOrigin(0.5);
+        buttonText.setScrollFactor(0);
+        buttonText.setDepth(10003);
+
+        // Button hover effect
+        buttonBg.on('pointerover', () => {
+            buttonBg.setFillStyle(0x00ff00);
+        });
+
+        buttonBg.on('pointerout', () => {
+            buttonBg.setFillStyle(0x00aa00);
+        });
+
+        // Button click - restart game
+        buttonBg.on('pointerdown', () => {
+            this.scene.restart();
+        });
     }
 }

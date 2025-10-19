@@ -227,7 +227,7 @@ export default class BootScene extends Phaser.Scene {
         this.load.image('skill-shield', 'assets/Skills/skill_shield.png');
         this.load.image('skill-lightning', 'assets/Skills/skill_lightning.png');
         this.load.image('skill-berserker', 'assets/Skills/skill_berserker.png');
-        this.load.image('skill-summon', 'assets/Skills/skill_summon.png');
+        this.load.image('skill-summon-army', 'assets/Skills/skill_summon_army.png');
 
         // Gold coin sprites
         // G_Spawn: 896x128 = 7 frames of 128x128 (spawn animation)

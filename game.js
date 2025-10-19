@@ -3088,6 +3088,7 @@ function gameLoop(timestamp) {
 
 // Resize canvas to fill window
 function resizeCanvas() {
+    // Set canvas size to exact window dimensions
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 

@@ -125,11 +125,15 @@ export default class MiniArcher extends Phaser.GameObjects.Sprite {
     }
 
     autoFire(currentTime) {
-        // Check cooldown
-        if (currentTime - this.lastFireTime < this.fireRate) return;
+        // Apply berserker mode fire rate multiplier if active
+        const fireRateMultiplier = this.scene.player?.fireRateMultiplier || 1.0;
+        const effectiveFireRate = this.fireRate / fireRateMultiplier;
 
-        // Find nearest enemy
-        const target = this.findNearestEnemy();
+        // Check cooldown
+        if (currentTime - this.lastFireTime < effectiveFireRate) return;
+
+        // Find nearest target (enemy or hut)
+        const target = this.findNearestTarget();
         if (!target) return;
 
         // Check range
@@ -141,11 +145,34 @@ export default class MiniArcher extends Phaser.GameObjects.Sprite {
         this.lastFireTime = currentTime;
     }
 
+    /**
+     * Find nearest target - prioritizes enemies first, then goblin huts
+     * Only returns targets that are WITHIN RANGE
+     */
+    findNearestTarget() {
+        // First, try to find enemies WITHIN RANGE (priority)
+        const enemy = this.findNearestEnemy();
+        if (enemy) {
+            const distToEnemy = Phaser.Math.Distance.Between(this.x, this.y, enemy.x, enemy.y);
+
+            // If enemy is within range, target it
+            if (distToEnemy <= this.range) {
+                return enemy;
+            }
+
+            // Enemy exists but is too far - look for huts instead
+        }
+
+        // No enemies in range, target nearest goblin hut
+        const hut = this.findNearestHut();
+        return hut;
+    }
+
     findNearestEnemy() {
         if (!this.scene.enemies) return null;
 
         const enemies = this.scene.enemies.getChildren()
-            .filter(e => !e.isDying && e.active);
+            .filter(e => e.active && !e.isDying && e.health > 0);
 
         if (enemies.length === 0) return null;
 
@@ -163,6 +190,28 @@ export default class MiniArcher extends Phaser.GameObjects.Sprite {
         return nearest;
     }
 
+    findNearestHut() {
+        if (!this.scene.goblinHuts) return null;
+
+        const huts = this.scene.goblinHuts.getChildren()
+            .filter(h => h.active && !h.isDestroyed);
+
+        if (huts.length === 0) return null;
+
+        let nearest = null;
+        let minDist = Infinity;
+
+        for (const hut of huts) {
+            const dist = Phaser.Math.Distance.Between(this.x, this.y, hut.x, hut.y);
+            if (dist < minDist) {
+                minDist = dist;
+                nearest = hut;
+            }
+        }
+
+        return nearest;
+    }
+
     fireProjectile(target) {
         // Calculate angle to target
         const angle = Phaser.Math.Angle.Between(this.x, this.y, target.x, target.y);
@@ -171,9 +220,12 @@ export default class MiniArcher extends Phaser.GameObjects.Sprite {
         const projectile = new Projectile(this.scene, this.x, this.y, 'arrow');
         this.scene.projectiles.add(projectile);
 
+        // Apply berserker mode damage multiplier if active
+        const damageMultiplier = this.scene.player?.damageMultiplier || 1.0;
+
         // Configure projectile
         projectile.setFrame(0);
-        projectile.damage = this.damage;
+        projectile.damage = this.damage * damageMultiplier;
         projectile.setScale(0.7); // Smaller arrows for mini archers
 
         // Set velocity

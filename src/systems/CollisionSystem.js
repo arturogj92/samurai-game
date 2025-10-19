@@ -11,31 +11,44 @@ export default class CollisionSystem {
     update() {
         // Check each active arrow against all enemies and huts using raycast
         this.scene.projectiles.getChildren().forEach(arrow => {
-            if (!arrow.active || arrow.stuckToEnemy || arrow.stuckToHut) return;
+            if (!arrow.active || arrow.stuckToEnemy || arrow.stuckToHut || arrow.stuckToPlayer) return;
 
             // Get arrow tip positions (current and previous)
             const prevTip = arrow.getPrevTipPosition();
             const currTip = arrow.getTipPosition();
 
-            // Check raycast against all enemies
-            this.scene.enemies.getChildren().forEach(enemy => {
-                if (enemy.isDying || !enemy.active) return;
-
-                // Check if raycast line intersects with enemy hitbox
-                if (this.lineIntersectsEnemy(prevTip, currTip, enemy)) {
-                    this.onProjectileHitEnemy(arrow, enemy);
+            // If this is an enemy projectile, check collision with player
+            if (arrow.isEnemyProjectile) {
+                const player = this.scene.player;
+                if (player && player.active) {
+                    // Check if raycast line intersects with player hitbox
+                    if (this.lineIntersectsPlayer(prevTip, currTip, player)) {
+                        this.onProjectileHitPlayer(arrow, player);
+                    }
                 }
-            });
+            } else {
+                // Player projectile - check against enemies and huts
 
-            // Check raycast against all goblin huts
-            this.scene.goblinHuts.getChildren().forEach(hut => {
-                if (hut.isDestroyed || !hut.active) return;
+                // Check raycast against all enemies
+                this.scene.enemies.getChildren().forEach(enemy => {
+                    if (enemy.isDying || !enemy.active) return;
 
-                // Check if raycast line intersects with hut hitbox
-                if (this.lineIntersectsHut(prevTip, currTip, hut)) {
-                    this.onProjectileHitHut(arrow, hut);
-                }
-            });
+                    // Check if raycast line intersects with enemy hitbox
+                    if (this.lineIntersectsEnemy(prevTip, currTip, enemy)) {
+                        this.onProjectileHitEnemy(arrow, enemy);
+                    }
+                });
+
+                // Check raycast against all goblin huts
+                this.scene.goblinHuts.getChildren().forEach(hut => {
+                    if (hut.isDestroyed || !hut.active) return;
+
+                    // Check if raycast line intersects with hut hitbox
+                    if (this.lineIntersectsHut(prevTip, currTip, hut)) {
+                        this.onProjectileHitHut(arrow, hut);
+                    }
+                });
+            }
         });
     }
 
@@ -151,8 +164,8 @@ export default class CollisionSystem {
         if (!projectile || !projectile.active) return;
         if (projectile.stuckToEnemy || projectile.stuckToHut) return; // Already stuck
 
-        // Deal damage to enemy
-        enemy.takeDamage(projectile.damage);
+        // Deal damage to enemy and pass arrow angle for knockback
+        enemy.takeDamage(projectile.damage, projectile.rotation);
 
         // Change to stuck arrow sprite (Arrow_hit.png)
         projectile.setTexture('arrow-hit');
@@ -196,5 +209,91 @@ export default class CollisionSystem {
         projectile.setAlpha(0.9);
 
         console.log('🎯 Raycast hit! Arrow stuck to hut!');
+    }
+
+    // Check if a line segment intersects with player's hitbox
+    lineIntersectsPlayer(p1, p2, player) {
+        if (!player.body) {
+            // Fallback: use sprite position and size
+            const width = 40;  // Approximate player hitbox width
+            const height = 60; // Approximate player hitbox height
+            const rect = {
+                x: player.x - width / 2,
+                y: player.y - height / 2,
+                width: width,
+                height: height
+            };
+            return this.lineIntersectsRect(p1, p2, rect);
+        }
+
+        // Use physics body bounds
+        const rect = {
+            x: player.body.x,
+            y: player.body.y,
+            width: player.body.width,
+            height: player.body.height
+        };
+        return this.lineIntersectsRect(p1, p2, rect);
+    }
+
+    onProjectileHitPlayer(projectile, player) {
+        if (!projectile || !projectile.active) return;
+        if (projectile.stuckToPlayer) return; // Already stuck
+
+        // Store health before damage
+        const healthBefore = player.health || 0;
+
+        // Deal damage to player
+        if (player.takeDamage) {
+            player.takeDamage(projectile.damage);
+        }
+
+        // Check if player died from this hit
+        const healthAfter = player.health || 0;
+        const playerDied = healthAfter <= 0;
+
+        console.log(`🎯 Arrow hit: healthBefore=${healthBefore}, healthAfter=${healthAfter}, died=${playerDied}`);
+
+        // Apply knockback if player survived and has body
+        if (!playerDied && player.body) {
+            const knockbackForce = 450; // Stronger knockback
+            const angle = projectile.rotation;
+            const knockbackX = Math.cos(angle) * knockbackForce;
+            const knockbackY = Math.sin(angle) * knockbackForce;
+
+            // Get current velocity
+            const currentVelX = player.body.velocity.x || 0;
+            const currentVelY = player.body.velocity.y || 0;
+
+            // ADD knockback to current velocity (so you always feel it)
+            player.body.setVelocity(
+                currentVelX + knockbackX,
+                currentVelY + knockbackY
+            );
+
+            console.log(`💥 Knockback applied! Force: ${knockbackForce}, added: (${knockbackX.toFixed(1)}, ${knockbackY.toFixed(1)}), result: (${(currentVelX + knockbackX).toFixed(1)}, ${(currentVelY + knockbackY).toFixed(1)})`);
+        } else if (playerDied) {
+            console.log(`💀 Player died - no knockback`);
+        } else if (!player.body) {
+            console.log(`⚠️ Player has no body - no knockback`);
+        }
+
+        // Change to stuck arrow sprite (Arrow_hit.png)
+        projectile.setTexture('arrow-hit');
+
+        // Stop the arrow
+        projectile.stop();
+
+        // Store reference to player so arrow follows them
+        projectile.stuckToPlayer = player;
+        projectile.stuckOffsetX = projectile.x - player.x;
+        projectile.stuckOffsetY = projectile.y - player.y;
+        projectile.stuckRotation = projectile.rotation;
+
+        // Keep tint on stuck arrow
+        projectile.setAlpha(0.9);
+
+        const critText = projectile.isCritical ? ' 💥 CRITICAL HIT!' : '';
+        console.log(`🎯 Enemy arrow stuck to player! Damage: ${projectile.damage}${critText}`);
     }
 }

@@ -118,8 +118,8 @@ export default class MouseFireSystem {
         // Rotate arrow to point in direction of movement
         projectile.rotation = angle;
 
-        // Add glow effect
-        projectile.setBlendMode(Phaser.BlendModes.ADD);
+        // Use normal blend mode (no glow)
+        projectile.setBlendMode(Phaser.BlendModes.NORMAL);
     }
 
     /**

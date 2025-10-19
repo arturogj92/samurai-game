@@ -14,7 +14,7 @@ export default class AbilityBarUI {
             { icon: 'skill-shield', key: 'R', name: 'shield' },
             { icon: 'skill-lightning', key: 'X', name: 'chainLightning' },
             { icon: 'skill-berserker', key: 'Z', name: 'berserker' },
-            { icon: 'skill-summon', key: 'F', name: 'summon' }
+            { icon: 'skill-summon-army', key: 'F', name: 'summon' }
         ];
 
         // UI configuration - larger icons for better visibility

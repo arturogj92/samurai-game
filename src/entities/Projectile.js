@@ -19,9 +19,10 @@ export default class Projectile extends Phaser.GameObjects.Sprite {
         this.prevX = x;
         this.prevY = y;
 
-        // Stuck state (can stick to enemies or huts)
+        // Stuck state (can stick to enemies, huts, or player)
         this.stuckToEnemy = null;
         this.stuckToHut = null;
+        this.stuckToPlayer = null;
         this.stuckOffsetX = 0;
         this.stuckOffsetY = 0;
         this.stuckRotation = 0;
@@ -48,6 +49,26 @@ export default class Projectile extends Phaser.GameObjects.Sprite {
     }
 
     update() {
+        // If arrow is stuck to a player, follow it
+        if (this.stuckToPlayer) {
+            // Check if player is still alive
+            if (!this.stuckToPlayer.active) {
+                // Player died/inactive, remove the arrow
+                this.setActive(false);
+                this.setVisible(false);
+                this.stuckToPlayer = null;
+                return;
+            }
+
+            // Follow the player with stored offset
+            this.x = this.stuckToPlayer.x + this.stuckOffsetX;
+            this.y = this.stuckToPlayer.y + this.stuckOffsetY;
+
+            // Keep the rotation frozen when arrow stuck
+            this.rotation = this.stuckRotation;
+            return;
+        }
+
         // If arrow is stuck to an enemy, follow it
         if (this.stuckToEnemy) {
             // Check if enemy is still alive
