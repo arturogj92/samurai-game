@@ -11,3 +11,4 @@ _This project name is used for task organization in CodeAgentSwarm. All tasks cr
 _For complete CodeAgentSwarm instructions, see the global CLAUDE.md file at ~/.claude/CLAUDE.md_
 
 <!-- CODEAGENTSWARM PROJECT CONFIG END -->
+- usa diseño modular siempre, crea clases, no me satures el game.js #

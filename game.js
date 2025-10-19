@@ -1,4 +1,5 @@
 // Game Configuration
+console.log('🎮 GAME.JS LOADED - Chain Lightning Version v20251014004 ⚡');
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
@@ -349,7 +350,7 @@ class SpriteAnimator {
         }
     }
 
-    draw(ctx, x, y, scale = 1, flipH = false) {
+    draw(ctx, x, y, scale = 1, flipH = false, row = 0) {
         if (!this.loaded) return;
 
         const drawWidth = this.frameWidth * scale;
@@ -359,6 +360,9 @@ class SpriteAnimator {
         let destX = x - drawWidth / 2;
         let destY = y - drawHeight / 2;
 
+        // Calculate source Y based on row (for multi-directional sprites)
+        const sourceY = row * this.frameHeight;
+
         if (flipH) {
             ctx.save();
             ctx.translate(x, y);
@@ -367,7 +371,7 @@ class SpriteAnimator {
             ctx.drawImage(
                 this.image,
                 this.currentFrame * this.frameWidth, // source x
-                0, // source y
+                sourceY, // source y (row-based for directional sprites)
                 this.frameWidth, // source width
                 this.frameHeight, // source height
                 -drawWidth / 2, // dest x (centered)
@@ -382,7 +386,7 @@ class SpriteAnimator {
             ctx.drawImage(
                 this.image,
                 this.currentFrame * this.frameWidth, // source x
-                0, // source y
+                sourceY, // source y (row-based for directional sprites)
                 this.frameWidth, // source width
                 this.frameHeight, // source height
                 destX, // dest x (centered)
@@ -447,6 +451,11 @@ const SPRITES = {
 // Arrow sprite (loaded separately)
 let arrowSprite = null;
 
+// Background tiles
+let backgroundTile107 = null;
+let backgroundTile108 = null;
+let backgroundTile109 = null;
+
 // Initialize sprites
 function initSprites() {
     // Kunoichi sprites (enemies)
@@ -477,21 +486,30 @@ function initSprites() {
     SPRITES.ninjaPeasant.hurt = new SpriteAnimator('assets/Ninja_Peasant/Hurt.png', 96, 96, 2, 8);
     SPRITES.ninjaPeasant.dead = new SpriteAnimator('assets/Ninja_Peasant/Dead.png', 96, 96, 4, 8);
 
-    // Samurai Archer sprites (player)
-    SPRITES.samuraiArcher.idle = new SpriteAnimator('assets/Samurai_Archer/Idle.png', 128, 128, 9, 8); // Fixed: 1152/128 = 9 frames
-    SPRITES.samuraiArcher.walk = new SpriteAnimator('assets/Samurai_Archer/Walk.png', 128, 128, 8, 12);
-    SPRITES.samuraiArcher.run = new SpriteAnimator('assets/Samurai_Archer/Run.png', 128, 128, 8, 15);
-    SPRITES.samuraiArcher.attack1 = new SpriteAnimator('assets/Samurai_Archer/Attack_1.png', 128, 128, 4, 12);
-    SPRITES.samuraiArcher.attack2 = new SpriteAnimator('assets/Samurai_Archer/Attack_2.png', 128, 128, 4, 12);
-    SPRITES.samuraiArcher.attack3 = new SpriteAnimator('assets/Samurai_Archer/Attack_3.png', 128, 128, 4, 12);
-    SPRITES.samuraiArcher.shot = new SpriteAnimator('assets/Samurai_Archer/Shot.png', 128, 128, 14, 15);
-    SPRITES.samuraiArcher.hurt = new SpriteAnimator('assets/Samurai_Archer/Hurt.png', 128, 128, 3, 8);
-    SPRITES.samuraiArcher.dead = new SpriteAnimator('assets/Samurai_Archer/Dead.png', 128, 128, 7, 8);
-    SPRITES.samuraiArcher.jump = new SpriteAnimator('assets/Samurai_Archer/Jump.png', 128, 128, 10, 12);
+    // Archer sprites (player) - Now using Archer_Blue.png for all animations
+    const archerPath = 'assets/Factions/Knights/Troops/Archer/Blue/Archer_Blue.png';
+    SPRITES.samuraiArcher.idle = new SpriteAnimator(archerPath, 192, 192, 6, 8); // Row 0: Idle
+    SPRITES.samuraiArcher.walk = new SpriteAnimator(archerPath, 192, 192, 6, 12); // Row 1: Walk
+    SPRITES.samuraiArcher.run = new SpriteAnimator(archerPath, 192, 192, 6, 15); // Row 1: Walk (faster)
+    SPRITES.samuraiArcher.attack1 = new SpriteAnimator(archerPath, 192, 192, 8, 12); // Row 2-6: Shooting
+    SPRITES.samuraiArcher.attack2 = new SpriteAnimator(archerPath, 192, 192, 8, 12); // Row 2-6: Shooting
+    SPRITES.samuraiArcher.attack3 = new SpriteAnimator(archerPath, 192, 192, 8, 12); // Row 2-6: Shooting
+    SPRITES.samuraiArcher.shot = new SpriteAnimator(archerPath, 192, 192, 8, 15); // Row 2-6: Shooting directions
+    SPRITES.samuraiArcher.hurt = new SpriteAnimator(archerPath, 192, 192, 6, 8); // Row 1: Walk (hurt uses walk)
+    SPRITES.samuraiArcher.dead = new SpriteAnimator(archerPath, 192, 192, 6, 8); // Row 0: Idle (death uses idle)
+    SPRITES.samuraiArcher.jump = new SpriteAnimator(archerPath, 192, 192, 6, 12); // Row 1: Walk (jump uses walk)
 
     // Load arrow sprite
     arrowSprite = new Image();
-    arrowSprite.src = 'assets/Samurai_Archer/Arrow.png';
+    arrowSprite.src = 'assets/Factions/Knights/Troops/Archer/Arrow/Arrow.png';
+
+    // Load background tiles
+    backgroundTile107 = new Image();
+    backgroundTile107.src = 'assets/2 Dungeon Tileset/1 Tiles/Tile_107.png';
+    backgroundTile108 = new Image();
+    backgroundTile108.src = 'assets/2 Dungeon Tileset/1 Tiles/Tile_108.png';
+    backgroundTile109 = new Image();
+    backgroundTile109.src = 'assets/2 Dungeon Tileset/1 Tiles/Tile_109.png';
 }
 
 // Initialize sprites when page loads
@@ -681,12 +699,14 @@ const vendor = new Vendor();
 const ABILITIES = {
     dash: {
         key: 'q',
+        unlocked: true, // Always unlocked
         cooldown: 3000, // 3 seconds
         lastUsed: 0,
         duration: 200, // Dash animation duration
         distance: 150, // Dash distance
 
         use(timestamp) {
+            if (!this.unlocked) return false;
             if (timestamp - this.lastUsed < this.cooldown) return false;
             if (ninja.isDashing) return false; // Don't dash while already dashing
 
@@ -720,11 +740,13 @@ const ABILITIES = {
 
     burst: {
         key: 'e',
+        unlocked: false, // Locked - must be purchased
         cooldown: 5000, // 5 seconds
         lastUsed: 0,
         projectiles: 12, // Number of shurikens to fire
 
         use(timestamp) {
+            if (!this.unlocked) return false;
             if (timestamp - this.lastUsed < this.cooldown) return false;
 
             // Fire shurikens in all directions (but respect max limit)
@@ -747,6 +769,7 @@ const ABILITIES = {
 
     shield: {
         key: 'r',
+        unlocked: true, // Always unlocked
         cooldown: 10000, // 10 seconds
         lastUsed: 0,
         duration: 3000, // 3 seconds of invincibility
@@ -754,6 +777,7 @@ const ABILITIES = {
         endTime: 0,
 
         use(timestamp) {
+            if (!this.unlocked) return false;
             if (timestamp - this.lastUsed < this.cooldown) return false;
 
             this.active = true;
@@ -770,8 +794,94 @@ const ABILITIES = {
                 ninja.shielded = false;
             }
         }
+    },
+
+    chainLightning: {
+        key: 'x',
+        unlocked: false, // Locked - must be purchased
+        cooldown: 7000, // 7 seconds
+        lastUsed: 0,
+        maxBounces: 5,
+        damageDecay: 0.7, // Each bounce does 70% of previous damage
+        baseDamage: 30,
+        maxRange: 400, // Max distance to find next target
+
+        use(timestamp) {
+            if (!this.unlocked) return false;
+            if (timestamp - this.lastUsed < this.cooldown) return false;
+            if (enemies.length === 0) return false;
+
+            console.log('⚡ CHAIN LIGHTNING ACTIVATED! Enemies:', enemies.length);
+
+            // Find nearest enemy to player
+            let nearestEnemy = null;
+            let nearestDist = Infinity;
+
+            for (const enemy of enemies) {
+                const dx = enemy.x - ninja.x;
+                const dy = enemy.y - ninja.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < nearestDist) {
+                    nearestDist = dist;
+                    nearestEnemy = enemy;
+                }
+            }
+
+            if (!nearestEnemy) return false;
+
+            // Chain lightning through enemies
+            const hitEnemies = new Set();
+            let currentTarget = nearestEnemy;
+            let currentDamage = this.baseDamage;
+            let previousTarget = { x: ninja.x, y: ninja.y };
+
+            for (let bounce = 0; bounce < this.maxBounces && currentTarget; bounce++) {
+                // Damage current target
+                currentTarget.health -= currentDamage;
+                hitEnemies.add(currentTarget);
+
+                // Create lightning effect from previous to current
+                const lightningEffect = new ChainLightningEffect(
+                    previousTarget.x,
+                    previousTarget.y,
+                    currentTarget.x,
+                    currentTarget.y
+                );
+                effects.push(lightningEffect);
+                console.log(`  ⚡ Bolt ${bounce + 1}: (${previousTarget.x.toFixed(0)},${previousTarget.y.toFixed(0)}) → (${currentTarget.x.toFixed(0)},${currentTarget.y.toFixed(0)})`);
+
+                // Find next target
+                let nextTarget = null;
+                let nextDist = Infinity;
+
+                for (const enemy of enemies) {
+                    if (hitEnemies.has(enemy)) continue;
+
+                    const dx = enemy.x - currentTarget.x;
+                    const dy = enemy.y - currentTarget.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < nextDist && dist <= this.maxRange) {
+                        nextDist = dist;
+                        nextTarget = enemy;
+                    }
+                }
+
+                previousTarget = currentTarget;
+                currentTarget = nextTarget;
+                currentDamage *= this.damageDecay;
+            }
+
+            console.log(`⚡ Chain Lightning complete! Total effects: ${effects.length}`);
+            this.lastUsed = timestamp;
+            return true;
+        }
     }
 };
+
+// Verify Chain Lightning is loaded
+console.log('⚡ Chain Lightning ability loaded:', !!ABILITIES.chainLightning);
+console.log('⚡ Chain Lightning key:', ABILITIES.chainLightning?.key);
 
 // Upgrade system - Now purchased with gold
 const UPGRADES = {
@@ -866,6 +976,28 @@ const UPGRADES = {
             if (!this.repeatable) {
                 this.purchased = true;
             }
+        }
+    },
+    unlockBurst: {
+        name: "🌟 Unlock Burst Attack",
+        description: "Unlock the Burst ability (E) - fires 12 shurikens in all directions",
+        cost: 80,
+        purchased: false,
+        apply() {
+            ABILITIES.burst.unlocked = true;
+            ABILITIES.burst.lastUsed = performance.now(); // Set to now so it's immediately usable
+            this.purchased = true;
+        }
+    },
+    unlockLightning: {
+        name: "⚡ Unlock Chain Lightning",
+        description: "Unlock the Chain Lightning ability (X) - devastating electric attack that chains between enemies",
+        cost: 120,
+        purchased: false,
+        apply() {
+            ABILITIES.chainLightning.unlocked = true;
+            ABILITIES.chainLightning.lastUsed = performance.now() - ABILITIES.chainLightning.cooldown; // Make immediately ready
+            this.purchased = true;
         }
     }
 };
@@ -1003,13 +1135,79 @@ function createBurstEffect(x, y) {
     effects.push(new Effect(x, y, 'burst'));
 }
 
+// Chain Lightning Effect Class
+class ChainLightningEffect {
+    constructor(x1, y1, x2, y2) {
+        this.x1 = x1;
+        this.y1 = y1;
+        this.x2 = x2;
+        this.y2 = y2;
+        this.lifetime = 0;
+        this.maxLifetime = 500; // 500ms lightning bolt duration (increased for visibility)
+        this.segments = 12; // Number of segments in the lightning bolt
+        this.jitter = 15; // How much the lightning zigzags
+    }
+
+    update(deltaTime) {
+        this.lifetime += deltaTime;
+        return this.lifetime < this.maxLifetime;
+    }
+
+    draw() {
+        const alpha = 1 - (this.lifetime / this.maxLifetime);
+
+        // Draw lightning bolt with zigzag effect - BRIGHT BLUE/WHITE
+        ctx.strokeStyle = `rgba(100, 200, 255, ${alpha})`;
+        ctx.lineWidth = 5;
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = `rgba(100, 200, 255, ${alpha * 0.8})`;
+
+        ctx.beginPath();
+        ctx.moveTo(this.x1, this.y1);
+
+        // Create zigzag segments
+        for (let i = 1; i < this.segments; i++) {
+            const t = i / this.segments;
+            const x = this.x1 + (this.x2 - this.x1) * t;
+            const y = this.y1 + (this.y2 - this.y1) * t;
+
+            // Add random offset perpendicular to the line
+            const dx = this.x2 - this.x1;
+            const dy = this.y2 - this.y1;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const perpX = -dy / length;
+            const perpY = dx / length;
+
+            const offset = (Math.random() - 0.5) * this.jitter;
+            ctx.lineTo(x + perpX * offset, y + perpY * offset);
+        }
+
+        ctx.lineTo(this.x2, this.y2);
+        ctx.stroke();
+
+        // Draw bright white core for extra visibility
+        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.6})`;
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = `rgba(255, 255, 255, ${alpha})`;
+
+        ctx.beginPath();
+        ctx.moveTo(this.x1, this.y1);
+        ctx.lineTo(this.x2, this.y2);
+        ctx.stroke();
+
+        // Reset shadow
+        ctx.shadowBlur = 0;
+    }
+}
+
 // Player (Ninja) Class
 class Ninja {
     constructor(x, y) {
         this.x = x;
         this.y = y;
         this.size = 35; // Hitbox size (smaller than sprite)
-        this.spriteScale = 1.0; // Full size 128x128 sprites
+        this.spriteScale = 0.7; // Adjusted for 192x192 Archer_Blue sprites (was 1.0 for 128x128)
         this.speed = 3; // Reduced from 5 to 3
         this.keys = {};
         this.shielded = false;
@@ -1022,13 +1220,15 @@ class Ninja {
         this.invulnerabilityDuration = 1500; // 1.5 seconds of iframes
 
         // Player gets its OWN sprite instances to prevent any sharing issues
+        // All animations now use Archer_Blue.png with proper row mapping
+        const archerSpritePath = 'assets/Factions/Knights/Troops/Archer/Blue/Archer_Blue.png';
         this.sprites = {
-            idle: new SpriteAnimator('assets/Samurai_Archer/Idle.png', 128, 128, 9, 8), // Fixed: 1152/128 = 9 frames
-            walk: new SpriteAnimator('assets/Samurai_Archer/Walk.png', 128, 128, 8, 12),
-            run: new SpriteAnimator('assets/Samurai_Archer/Run.png', 128, 128, 8, 15),
-            shot: new SpriteAnimator('assets/Samurai_Archer/Shot.png', 128, 128, 14, 15),
-            protect: new SpriteAnimator('assets/Samurai_Commander/Protect.png', 128, 128, 2, 8),
-            hurt: new SpriteAnimator('assets/Samurai_Archer/Hurt.png', 128, 128, 3, 8, false), // Non-looping hurt animation
+            idle: new SpriteAnimator(archerSpritePath, 192, 192, 6, 8), // Row 0: Idle breathing (6 frames)
+            walk: new SpriteAnimator(archerSpritePath, 192, 192, 6, 12), // Row 1: Walking (6 frames)
+            run: new SpriteAnimator(archerSpritePath, 192, 192, 6, 15),  // Row 1: Walking faster (6 frames, reuse walk)
+            shot: new SpriteAnimator(archerSpritePath, 192, 192, 8, 15), // Rows 2-6: Shooting directions (8 frames)
+            protect: new SpriteAnimator(archerSpritePath, 192, 192, 6, 8), // Use idle animation for shield
+            hurt: new SpriteAnimator(archerSpritePath, 192, 192, 6, 12, false), // Use walk animation, non-looping
         };
 
         // Sprite animation state
@@ -1041,6 +1241,7 @@ class Ninja {
         // Attack animation state
         this.isAttacking = false;
         this.attackEndTime = 0;
+        this.shootingDirection = 'down'; // Track shooting direction: 'up', 'down', 'left', 'right'
 
         // Hurt animation state
         this.isHurt = false;
@@ -1169,14 +1370,30 @@ class Ninja {
         }
     }
 
-    startAttack(timestamp) {
+    startAttack(timestamp, targetX, targetY) {
         this.isAttacking = true;
-        this.attackEndTime = timestamp + 400; // 400ms attack animation (longer for archer)
+        this.attackEndTime = timestamp + 400;
 
-        // Reset the shot animation to start from beginning
-        const shotSprite = this.sprites.shot;
-        if (shotSprite) {
-            shotSprite.reset();
+        // Calculate shooting direction
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
+        const absDx = Math.abs(dx);
+        const absDy = Math.abs(dy);
+
+        // Choose direction based on which axis has bigger difference
+        if (absDx > absDy) {
+            // Horizontal dominates
+            this.shootingDirection = dx > 0 ? 'right' : 'left';
+        } else {
+            // Vertical dominates
+            this.shootingDirection = dy > 0 ? 'down' : 'up';
+        }
+
+        console.log(`🎯 SHOOT: dir=${this.shootingDirection} | dx=${dx.toFixed(0)} (|${absDx.toFixed(0)}|) dy=${dy.toFixed(0)} (|${absDy.toFixed(0)}|) | player(${this.x.toFixed(0)},${this.y.toFixed(0)}) → target(${targetX.toFixed(0)},${targetY.toFixed(0)})`);
+
+        // Reset animation
+        if (this.sprites.shot) {
+            this.sprites.shot.reset();
         }
     }
 
@@ -1234,7 +1451,7 @@ class Ninja {
                 ctx.globalAlpha = alpha;
                 const trailSprite = this.sprites.run;
                 if (trailSprite && trailSprite.loaded) {
-                    trailSprite.draw(ctx, trail.x, trail.y, this.spriteScale * 0.8, !this.facingRight);
+                    trailSprite.draw(ctx, trail.x, trail.y, this.spriteScale * 0.8, !this.facingRight, 1); // Row 1 for walk/run
                 }
             }
             ctx.globalAlpha = 1.0;
@@ -1242,13 +1459,63 @@ class Ninja {
 
         // Shield is now only visible through the protect sprite animation (no glow effect)
 
-        // Draw samurai sprite using player's OWN sprites
+        // Draw archer sprite using player's OWN sprites
         const currentSprite = this.sprites[this.animationState];
+
+        // Calculate sprite row for Archer_Blue.png (all animations use same sprite sheet)
+        // Archer_Blue.png rows (0-indexed):
+        // Row 0=Idle, Row 1=Walk, Row 2=Up, Row 3=DiagUpRight, Row 4=Right, Row 5=DiagDownRight, Row 6=Down
+        let spriteRow = 0;
+        let flipH = !this.facingRight;
+
+        // Map animation state to sprite row
+        switch (this.animationState) {
+            case 'idle':
+            case 'protect':
+                spriteRow = 0; // Idle animation row
+                break;
+            case 'walk':
+            case 'run':
+            case 'hurt':
+                spriteRow = 1; // Walk animation row
+                break;
+            case 'shot':
+                // Map shooting direction to sprite row
+                switch (this.shootingDirection) {
+                    case 'up':
+                        spriteRow = 2;
+                        flipH = false;
+                        console.log(`✅ DRAW: Shooting UP → Row 2, flipH=false`);
+                        break;
+                    case 'right':
+                        spriteRow = 4;
+                        flipH = false;
+                        console.log(`✅ DRAW: Shooting RIGHT → Row 4, flipH=false`);
+                        break;
+                    case 'down':
+                        spriteRow = 6;
+                        flipH = false;
+                        console.log(`✅ DRAW: Shooting DOWN → Row 6, flipH=false`);
+                        break;
+                    case 'left':
+                        spriteRow = 4; // Use right row but flipped
+                        flipH = true;
+                        console.log(`✅ DRAW: Shooting LEFT → Row 4, flipH=true`);
+                        break;
+                    default:
+                        console.warn(`❌ Unknown shooting direction: ${this.shootingDirection}`);
+                        spriteRow = 6; // Default to down
+                        flipH = false;
+                }
+                break;
+            default:
+                spriteRow = 0; // Default to idle
+        }
         if (currentSprite && currentSprite.loaded) {
             // No visual glow effect when shielded (removed circle)
             // Shield is only visible through the protect animation sprite itself
             if (this.shielded) {
-                currentSprite.draw(ctx, this.x, this.y, this.spriteScale, !this.facingRight);
+                currentSprite.draw(ctx, this.x, this.y, this.spriteScale, flipH, spriteRow);
             }
             // Flashing effect when invulnerable
             else if (this.isInvulnerable) {
@@ -1256,13 +1523,13 @@ class Ninja {
                 const shouldShow = Math.floor(Date.now() / flashSpeed) % 2 === 0;
                 if (shouldShow) {
                     ctx.globalAlpha = 0.5;
-                    currentSprite.draw(ctx, this.x, this.y, this.spriteScale, !this.facingRight);
+                    currentSprite.draw(ctx, this.x, this.y, this.spriteScale, flipH, spriteRow);
                     ctx.globalAlpha = 1.0;
                 } else {
-                    currentSprite.draw(ctx, this.x, this.y, this.spriteScale, !this.facingRight);
+                    currentSprite.draw(ctx, this.x, this.y, this.spriteScale, flipH, spriteRow);
                 }
             } else {
-                currentSprite.draw(ctx, this.x, this.y, this.spriteScale, !this.facingRight);
+                currentSprite.draw(ctx, this.x, this.y, this.spriteScale, flipH, spriteRow);
             }
         } else {
             // Fallback: draw simple circle if sprite not loaded
@@ -1294,119 +1561,19 @@ class Ninja {
         ctx.fillStyle = '#ff0000';
         if (Math.random() < 0.01) console.log('✅ NEW CODE: Red health bar at Y=' + Math.round(barY));
         ctx.fillRect(barX, barY, fillWidth, barHeight);
-
-        // Debug: Draw hitbox (optional, can be removed)
-        if (false) { // Set to true to see hitbox
-            ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-            ctx.stroke();
-        }
     }
 }
 
-// Arrow Class (renamed from Shuriken)
-class Shuriken {
+// Arrow Class - now loaded from src/entities/Arrow.js (modular design)
+// Class 'Shuriken' is kept as alias for backward compatibility
+class Shuriken extends Arrow {
     constructor(x, y, targetX, targetY) {
-        this.x = x;
-        this.y = y;
-        this.size = 8;
-        this.speed = 6; // Reduced from 10 to 6
-
-        // Calculate direction to target
-        const dx = targetX - x;
-        const dy = targetY - y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-
-        this.vx = (dx / distance) * this.speed;
-        this.vy = (dy / distance) * this.speed;
-
-        // Calculate angle for arrow rotation (pointing towards target)
-        this.angle = Math.atan2(dy, dx);
+        super(x, y, targetX, targetY, arrowSprite);
     }
 
-    update() {
-        this.x += this.vx;
-        this.y += this.vy;
-    }
-
+    // Override draw to use ctx from game.js
     draw() {
-        if (arrowSprite && arrowSprite.complete) {
-            // Draw arrow sprite rotated towards direction (OPTIMIZED: no shadowBlur for performance)
-            ctx.save();
-            ctx.translate(this.x, this.y);
-            ctx.rotate(this.angle);
-
-            // Draw the arrow sprite (120x120 - balanced size for good visibility)
-            const arrowWidth = 120;
-            const arrowHeight = 120;
-
-            // Draw yellow glow circle behind arrow (performance-friendly alternative to shadowBlur)
-            ctx.globalAlpha = 0.3;
-            ctx.fillStyle = '#FFD700';
-            ctx.beginPath();
-            ctx.arc(0, 0, arrowWidth * 0.4, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Draw the arrow
-            ctx.globalAlpha = 1.0;
-            ctx.filter = 'brightness(2) saturate(0)';
-            ctx.drawImage(
-                arrowSprite,
-                -arrowWidth / 2,
-                -arrowHeight / 2,
-                arrowWidth,
-                arrowHeight
-            );
-            ctx.filter = 'none';
-
-            ctx.restore();
-        } else {
-            // Fallback: draw simple white arrow shape with yellow glow
-            ctx.save();
-            ctx.translate(this.x, this.y);
-            ctx.rotate(this.angle);
-
-            // Draw yellow glow circle behind arrow (performance-friendly)
-            ctx.globalAlpha = 0.3;
-            ctx.fillStyle = '#FFD700';
-            ctx.beginPath();
-            ctx.arc(0, 0, 48, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Draw the arrow
-            ctx.globalAlpha = 1.0;
-
-            // Arrow shaft (white) - BALANCED SIZE
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillRect(-36, -4.5, 60, 9);
-
-            // Arrow head (white) - BALANCED SIZE
-            ctx.fillStyle = '#FFFFFF';
-            ctx.beginPath();
-            ctx.moveTo(24, 0);
-            ctx.lineTo(12, -10.5);
-            ctx.lineTo(12, 10.5);
-            ctx.closePath();
-            ctx.fill();
-
-            // Arrow feathers (white with slight blue tint) - BALANCED SIZE
-            ctx.fillStyle = '#E0F0FF';
-            ctx.beginPath();
-            ctx.moveTo(-36, 0);
-            ctx.lineTo(-43.5, -6);
-            ctx.lineTo(-43.5, 6);
-            ctx.closePath();
-            ctx.fill();
-
-            ctx.restore();
-        }
-    }
-
-    isOffWorld() {
-        return this.x < -100 || this.x > WORLD.width + 100 ||
-               this.y < -100 || this.y > WORLD.height + 100;
+        super.draw(ctx);
     }
 }
 
@@ -1627,15 +1794,6 @@ class Enemy {
         if (this.isDying) {
             ctx.globalAlpha = 1.0;
         }
-
-        // Debug: Draw hitbox (optional)
-        if (false) { // Set to true to see hitbox
-            ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-            ctx.stroke();
-        }
     }
 }
 
@@ -1761,6 +1919,11 @@ class Bamboo {
         this.maxHits = 1; // Golpes necesarios para talar - un solo golpe para claridad visual
         this.shakeTime = 0; // Timestamp del último golpe
         this.shakeDuration = 300; // Duración del shake en ms
+
+        // Animación de disparo al plantar
+        this.spawnTime = performance.now(); // Tiempo de creación
+        this.shootDuration = 400; // Duración de la animación en ms
+        this.shootDistance = 60; // Distancia desde donde "dispara"
     }
 
     update(currentWave) {
@@ -1792,6 +1955,17 @@ class Bamboo {
     draw() {
         const currentStage = this.getGrowthStage(GAME_STATE.wave);
 
+        // Calcular animación de disparo al plantar
+        let shootOffsetY = 0;
+        const timeSinceSpawn = performance.now() - this.spawnTime;
+
+        if (timeSinceSpawn < this.shootDuration) {
+            // Easing function para efecto de "disparo" suave (ease-out cubic)
+            const progress = timeSinceSpawn / this.shootDuration;
+            const easeOut = 1 - Math.pow(1 - progress, 3);
+            shootOffsetY = this.shootDistance * (1 - easeOut);
+        }
+
         // Aplicar efecto de shake cuando es golpeado
         let shakeX = 0;
         let shakeY = 0;
@@ -1803,9 +1977,9 @@ class Bamboo {
             shakeY = (Math.random() - 0.5) * shakeIntensity;
         }
 
-        // Guardar contexto para aplicar shake
+        // Guardar contexto para aplicar shake y animación de disparo
         ctx.save();
-        ctx.translate(shakeX, shakeY);
+        ctx.translate(shakeX, shakeY + shootOffsetY);
 
         if (currentStage === 'seed') {
             // Etapa 1: Semilla/brote pequeño (MUCHO MÁS GRANDE)
@@ -2043,7 +2217,10 @@ class WoodSellParticle {
         const dy = this.targetY - this.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
-        if (dist > 5) {
+        // Radio de absorción aumentado para prevenir órbita (debe ser mayor que maxSpeed)
+        const absorptionRadius = 20;
+
+        if (dist > absorptionRadius) {
             const angle = Math.atan2(dy, dx);
             const attractionStrength = 0.8; // Atracción fuerte
 
@@ -2061,7 +2238,7 @@ class WoodSellParticle {
             this.x += this.vx;
             this.y += this.vy;
         } else {
-            // Llegó al vendedor
+            // Llegó al vendedor - radio de absorción aumentado previene órbita
             this.collected = true;
         }
     }
@@ -2145,6 +2322,14 @@ class FloatingText {
 const ninja = new Ninja(WORLD.width / 2, WORLD.height / 2);
 const shurikens = [];
 const enemies = [];
+
+// Verify HTML elements exist
+console.log('🔍 Checking HTML elements:');
+console.log('  abilityQ:', !!document.getElementById('abilityQ'));
+console.log('  abilityE:', !!document.getElementById('abilityE'));
+console.log('  abilityR:', !!document.getElementById('abilityR'));
+console.log('  abilityX:', !!document.getElementById('abilityX'));
+console.log('  cooldownX:', !!document.getElementById('cooldownX'));
 const bamboos = [];
 const woodDrops = [];
 const woodSellParticles = []; // Partículas de madera cuando vendes
@@ -2185,10 +2370,15 @@ document.addEventListener('keydown', (e) => {
         ABILITIES.burst.use(timestamp);
     } else if (key === ABILITIES.shield.key) {
         ABILITIES.shield.use(timestamp);
+    } else if (key === ABILITIES.chainLightning.key) {
+        console.log('❌ X key pressed! Attempting to use Chain Lightning...');
+        const success = ABILITIES.chainLightning.use(timestamp);
+        console.log('❌ Chain Lightning result:', success);
     } else if (key === 'p') {
-        // Plantar bambú
+        // Plantar bambú con dispersión si hay bambú cercano
         if (GAME_STATE.resources.bambooSeeds > 0) {
-            bamboos.push(new Bamboo(ninja.x, ninja.y, GAME_STATE.wave));
+            const plantPos = findBambooPlantPosition(ninja.x, ninja.y);
+            bamboos.push(new Bamboo(plantPos.x, plantPos.y, GAME_STATE.wave));
             GAME_STATE.resources.bambooSeeds--;
         }
     } else if (key === 'h') {
@@ -2271,26 +2461,34 @@ function spawnEnemy() {
 }
 
 function checkCollisions() {
-    // Check shuriken-enemy collisions (OPTIMIZED: using squared distance)
+    // Check shuriken-enemy collisions (CIRCULAR HITBOX: arrow tip hitbox vs enemy hitbox)
     for (let i = shurikens.length - 1; i >= 0; i--) {
+        // Skip arrows that are already stuck
+        if (shurikens[i].isStuck) continue;
+
         for (let j = enemies.length - 1; j >= 0; j--) {
             // Skip dying enemies
             if (enemies[j].isDying) continue;
 
-            // Optimized: Use squared distance to avoid expensive sqrt
+            // Get arrow tip circular hitbox
+            const tipHitbox = shurikens[i].getTipHitbox();
+
+            // Circle-to-circle collision detection
+            // Two circles collide if distance between centers < sum of radii
             const distSq = distanceSquared(
-                shurikens[i].x, shurikens[i].y,
+                tipHitbox.x, tipHitbox.y,
                 enemies[j].x, enemies[j].y
             );
-            const hitRadiusSum = shurikens[i].size + enemies[j].size;
-            const hitRadiusSumSq = hitRadiusSum * hitRadiusSum;
+            const combinedRadius = tipHitbox.radius + enemies[j].size;
+            const combinedRadiusSq = combinedRadius * combinedRadius;
 
-            if (distSq < hitRadiusSumSq) {
-                // Hit!
+            if (distSq < combinedRadiusSq) {
+                // Hit! Arrow tip hitbox touched enemy hitbox
                 const enemyX = enemies[j].x;
                 const enemyY = enemies[j].y;
 
-                shurikens.splice(i, 1);
+                // Stick arrow to enemy instead of removing it
+                shurikens[i].stickToEnemy(enemies[j]);
 
                 // Start death animation instead of removing immediately
                 enemies[j].startDeath(performance.now());
@@ -2348,6 +2546,64 @@ function checkCollisions() {
             }
         }
     }
+}
+
+// Función para encontrar una posición adecuada para plantar bambú
+// Si hay bambú muy cerca, dispersa la plantación a los alrededores
+function findBambooPlantPosition(x, y) {
+    const minDistance = 70; // Distancia mínima entre bambús
+    const scatterRadius = 120; // Radio de dispersión cuando hay bambú cerca
+    const maxAttempts = 10; // Intentos máximos para encontrar posición
+
+    // Verificar si hay bambú muy cerca de la posición deseada
+    let hasBambooNearby = false;
+    for (let bamboo of bamboos) {
+        const dist = distance(x, y, bamboo.x, bamboo.y);
+        if (dist < minDistance) {
+            hasBambooNearby = true;
+            break;
+        }
+    }
+
+    // Si no hay bambú cerca, plantar en la posición original
+    if (!hasBambooNearby) {
+        return { x: x, y: y };
+    }
+
+    // Hay bambú cerca, buscar una posición aleatoria en los alrededores
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        // Generar ángulo y distancia aleatorios para dispersión
+        const angle = Math.random() * Math.PI * 2;
+        const dist = minDistance + Math.random() * scatterRadius;
+
+        const newX = x + Math.cos(angle) * dist;
+        const newY = y + Math.sin(angle) * dist;
+
+        // Verificar que la nueva posición no esté muy cerca de otro bambú
+        let isPositionGood = true;
+        for (let bamboo of bamboos) {
+            const distToBamboo = distance(newX, newY, bamboo.x, bamboo.y);
+            if (distToBamboo < minDistance) {
+                isPositionGood = false;
+                break;
+            }
+        }
+
+        // Verificar que esté dentro de los límites del canvas (con margen)
+        if (isPositionGood && newX > 50 && newX < canvas.width - 50 &&
+            newY > 50 && newY < canvas.height - 50) {
+            return { x: newX, y: newY };
+        }
+    }
+
+    // Si no encuentra posición después de varios intentos,
+    // usar posición con pequeño offset aleatorio
+    const smallOffset = 80;
+    const randomAngle = Math.random() * Math.PI * 2;
+    return {
+        x: x + Math.cos(randomAngle) * smallOffset,
+        y: y + Math.sin(randomAngle) * smallOffset
+    };
 }
 
 function checkBambooAxeCollision() {
@@ -2503,11 +2759,23 @@ function updateHUD() {
     updateAbilityUI('Q', ABILITIES.dash, timestamp);
     updateAbilityUI('E', ABILITIES.burst, timestamp);
     updateAbilityUI('R', ABILITIES.shield, timestamp);
+    updateAbilityUI('X', ABILITIES.chainLightning, timestamp);
 }
 
 function updateAbilityUI(key, ability, timestamp) {
     const abilityEl = document.getElementById(`ability${key}`);
     const cooldownEl = document.getElementById(`cooldown${key}`);
+
+    // Check if ability is locked
+    if (ability.unlocked === false) {
+        abilityEl.classList.add('locked');
+        abilityEl.classList.remove('cooldown', 'ready');
+        cooldownEl.style.width = '0%';
+        return;
+    }
+
+    // If unlocked, remove locked class
+    abilityEl.classList.remove('locked');
 
     const timeSinceUse = timestamp - ability.lastUsed;
     const cooldownRemaining = ability.cooldown - timeSinceUse;
@@ -2525,28 +2793,28 @@ function updateAbilityUI(key, ability, timestamp) {
 }
 
 function drawBackground() {
-    // Draw grid pattern
-    ctx.strokeStyle = '#2a2a2a';
-    ctx.lineWidth = 1;
+    // Draw tiled background using tiles 107, 108, and 109
+    if (backgroundTile107 && backgroundTile108 && backgroundTile109) {
+        const tileSize = 16; // Tiles are 16x16 pixels
+        const tiles = [backgroundTile107, backgroundTile108, backgroundTile109];
 
-    const gridSize = 100;
+        // Calculate visible tile range
+        const startX = Math.floor(camera.x / tileSize) * tileSize;
+        const startY = Math.floor(camera.y / tileSize) * tileSize;
+        const endX = camera.x + camera.width + tileSize;
+        const endY = camera.y + camera.height + tileSize;
 
-    // Vertical lines
-    const startX = Math.floor(camera.x / gridSize) * gridSize;
-    for (let x = startX; x < camera.x + camera.width; x += gridSize) {
-        ctx.beginPath();
-        ctx.moveTo(x, camera.y);
-        ctx.lineTo(x, camera.y + camera.height);
-        ctx.stroke();
-    }
+        // Draw tiles in a pattern
+        for (let y = startY; y < endY; y += tileSize) {
+            for (let x = startX; x < endX; x += tileSize) {
+                // Use a deterministic pattern based on position
+                // This ensures the same tile appears in the same place consistently
+                const tileIndex = (Math.floor(x / tileSize) + Math.floor(y / tileSize)) % 3;
+                const tile = tiles[tileIndex];
 
-    // Horizontal lines
-    const startY = Math.floor(camera.y / gridSize) * gridSize;
-    for (let y = startY; y < camera.y + camera.height; y += gridSize) {
-        ctx.beginPath();
-        ctx.moveTo(camera.x, y);
-        ctx.lineTo(camera.x + camera.width, y);
-        ctx.stroke();
+                ctx.drawImage(tile, x, y, tileSize, tileSize);
+            }
+        }
     }
 
     // Draw world border
@@ -2630,7 +2898,7 @@ function gameLoop(timestamp) {
                     ninja.facingRight = target.x > ninja.x;
 
                     shurikens.push(new Shuriken(ninja.x, ninja.y, target.x, target.y));
-                    ninja.startAttack(timestamp); // Trigger attack animation
+                    ninja.startAttack(timestamp, target.x, target.y); // Trigger attack animation with target direction
                     lastShurikenTime = timestamp;
                 }
             }
@@ -2652,6 +2920,15 @@ function gameLoop(timestamp) {
         // Remove dead enemies (after death animation completes) to prevent lag
         for (let i = enemies.length - 1; i >= 0; i--) {
             if (enemies[i].isDeathAnimationComplete(timestamp)) {
+                const deadEnemy = enemies[i];
+
+                // Remove arrows stuck to this enemy
+                for (let j = shurikens.length - 1; j >= 0; j--) {
+                    if (shurikens[j].stuckToEnemy === deadEnemy) {
+                        shurikens.splice(j, 1);
+                    }
+                }
+
                 enemies.splice(i, 1);
             }
         }
@@ -2667,12 +2944,10 @@ function gameLoop(timestamp) {
         // Check collisions
         checkCollisions();
 
-        // Update and draw effects
+        // Update effects (but don't draw them yet - they'll be drawn after camera transform)
         for (let i = effects.length - 1; i >= 0; i--) {
             if (!effects[i].update(deltaTime)) {
                 effects.splice(i, 1);
-            } else {
-                effects[i].draw();
             }
         }
     }
@@ -2789,6 +3064,11 @@ function gameLoop(timestamp) {
     }
     for (let enemy of enemies) {
         enemy.draw();
+    }
+
+    // Draw effects (lightning, dash, burst) - drawn with camera transform
+    for (let effect of effects) {
+        effect.draw();
     }
 
     // Draw floating texts (encima de todo)

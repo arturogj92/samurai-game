@@ -26,6 +26,7 @@
                 <button class="action-btn ability-btn" data-key="q">Q<br><span>Dash</span></button>
                 <button class="action-btn ability-btn" data-key="e">E<br><span>Burst</span></button>
                 <button class="action-btn ability-btn" data-key="r">R<br><span>Shield</span></button>
+                <button class="action-btn ability-btn" data-key="x">X<br><span>Lightning</span></button>
             </div>
 
             <!-- Utility Buttons -->
@@ -57,6 +58,11 @@
                     <div class="ability-key">R</div>
                     <div class="ability-name">Shield</div>
                     <div class="ability-cooldown" id="cooldownR"></div>
+                </div>
+                <div class="ability" id="abilityX">
+                    <div class="ability-key">X</div>
+                    <div class="ability-name">Lightning</div>
+                    <div class="ability-cooldown" id="cooldownX"></div>
                 </div>
                 <div class="ability bamboo-tool" id="abilityP">
                     <div class="ability-key">P</div>
@@ -113,14 +119,15 @@
                 </div>
                 <div class="tutorial-section">
                     <h3>⚔️ Combat:</h3>
-                    <p><kbd>Q</kbd> Dash | <kbd>E</kbd> Burst | <kbd>R</kbd> Shield</p>
+                    <p><kbd>Q</kbd> Dash | <kbd>E</kbd> Burst | <kbd>R</kbd> Shield | <kbd>X</kbd> Lightning</p>
                 </div>
                 <button id="closeTutorial" class="tutorial-close-btn">Got it! Let's Play!</button>
             </div>
         </div>
     </div>
-    <script src="assets-loader.js?v=20251014002"></script>
-    <script src="game.js?v=20251014002"></script>
-    <script src="assets-integration.js?v=20251014003"></script>
+    <script src="assets-loader.js?v=20251014007"></script>
+    <script src="src/entities/Arrow.js?v=20251014008"></script>
+    <script src="game.js?v=20251014008"></script>
+    <script src="assets-integration.js?v=20251014007"></script>
 </body>
 </html>

@@ -92,6 +92,23 @@ body {
     border-color: #f00;
 }
 
+.ability.locked {
+    opacity: 0.3;
+    border-color: #666;
+    background: rgba(0, 0, 0, 0.5);
+    filter: grayscale(100%);
+}
+
+.ability.locked::after {
+    content: '🔒';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 24px;
+    opacity: 0.8;
+}
+
 .ability-key {
     font-size: 20px;
     font-weight: bold;
