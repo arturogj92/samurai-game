@@ -50,6 +50,9 @@ export default class MainScene extends Phaser.Scene {
         // Start tracking level statistics
         this.levelSystem.startLevel();
 
+        // Generate random shop abilities for this level
+        this.generateShopAbilities();
+
         // Set custom cursor (crosshair style)
         this.input.setDefaultCursor('crosshair');
 
@@ -1627,6 +1630,9 @@ export default class MainScene extends Phaser.Scene {
         // Start tracking new level statistics
         this.levelSystem.startLevel();
 
+        // Generate new random shop abilities for this level
+        this.generateShopAbilities();
+
         // Reset player position to center of world
         if (this.player) {
             this.player.setPosition(WORLD.width / 2, WORLD.height / 2);
@@ -1881,5 +1887,17 @@ Damage Dealt: ${Math.floor(this.levelSystem.stats.damageDealt)}`,
             this.levelSystem.resetToLevel1();
             this.scene.restart();
         });
+    }
+
+    /**
+     * Generate random shop abilities for the current level
+     * These abilities stay the same throughout the level to prevent shop reroll exploit
+     */
+    generateShopAbilities() {
+        const { getRandomAbilities } = require('../config/AbilityPool.js');
+        const ownedIds = this.gameState.ownedAbilities || [];
+        this.gameState.availableAbilitiesThisLevel = getRandomAbilities(3, ownedIds);
+
+        console.log(`🛒 Generated ${this.gameState.availableAbilitiesThisLevel.length} shop abilities for Level ${this.levelSystem.currentLevel}`);
     }
 }

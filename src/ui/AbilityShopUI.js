@@ -2,9 +2,8 @@
  * AbilityShopUI
  * Shop interface showing 3 random abilities per level
  * Based on StartingAbilitySelectionUI structure for reliable interactions
+ * Abilities are generated once per level to prevent shop reroll exploits
  */
-import { getRandomAbilities } from '../config/AbilityPool.js';
-
 export default class AbilityShopUI {
     constructor(scene) {
         this.scene = scene;
@@ -28,11 +27,10 @@ export default class AbilityShopUI {
             this.scene.hideHealthBar();
         }
 
-        // Get 3 random abilities that player doesn't already own
-        const ownedIds = this.scene.gameState.ownedAbilities || [];
-        this.currentAbilities = getRandomAbilities(3, ownedIds);
+        // Use pre-generated abilities for this level (prevents shop reroll exploit)
+        this.currentAbilities = this.scene.gameState.availableAbilitiesThisLevel || [];
 
-        // If no abilities available (player owns them all), show message
+        // If no abilities were generated or all owned, show message
         if (this.currentAbilities.length === 0) {
             this.showNoAbilitiesMessage();
             return;
@@ -314,8 +312,13 @@ export default class AbilityShopUI {
             this.scene.abilityUpgradeSystem.registerAbility(ability.id);
         }
 
+        // Remove purchased ability from this level's available shop abilities
+        this.scene.gameState.availableAbilitiesThisLevel =
+            this.scene.gameState.availableAbilitiesThisLevel.filter(a => a.id !== ability.id);
+
         console.log(`✅ Purchased ability: ${ability.name} (${ability.id}) for ${ability.price} gold`);
         console.log(`📦 Owned abilities:`, this.scene.gameState.ownedAbilities);
+        console.log(`🛒 Remaining shop abilities this level:`, this.scene.gameState.availableAbilitiesThisLevel.length);
 
         // Close shop
         this.close();
