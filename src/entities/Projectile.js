@@ -52,7 +52,7 @@ export default class Projectile extends Phaser.GameObjects.Sprite {
         return { x: tipX, y: tipY };
     }
 
-    update() {
+    preUpdate(time, delta) {
         // If arrow is stuck to ground (from Arrow Storm), stay put
         if (this.stuckToGround) {
             // Don't move, don't update - just stay stuck in ground
@@ -121,8 +121,9 @@ export default class Projectile extends Phaser.GameObjects.Sprite {
         this.prevY = this.y;
 
         // Move arrow manually (no physics)
-        // Velocity is in pixels/second, so divide by 60 FPS
-        const deltaTime = 1 / 60; // Assume 60 FPS
+        // delta is in milliseconds, convert to seconds
+        // velocityX and velocityY are in pixels per second
+        const deltaTime = (delta || 16.67) / 1000; // Convert ms to seconds, default to 60fps if not provided
         this.x += this.velocityX * deltaTime;
         this.y += this.velocityY * deltaTime;
 

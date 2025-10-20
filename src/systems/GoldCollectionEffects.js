@@ -272,9 +272,15 @@ export default class GoldCollectionEffects {
      * Enhanced magnetic pull effect with visual feedback
      */
     updateMagneticPull(coins, player) {
-        const MAGNET_RANGE = 200; // Increased range for more dopamine
+        let MAGNET_RANGE = 200; // Base range
         const MAGNET_SPEED = 400; // Faster pull
-        const PULSE_RANGE = 100; // Range at which coins start pulsing
+        let PULSE_RANGE = 100; // Range at which coins start pulsing
+
+        // 🧲 Apply pickup radius multiplier upgrade
+        if (player.pickupRadiusMultiplier && player.pickupRadiusMultiplier > 1.0) {
+            MAGNET_RANGE = MAGNET_RANGE * player.pickupRadiusMultiplier;
+            PULSE_RANGE = PULSE_RANGE * player.pickupRadiusMultiplier;
+        }
 
         coins.getChildren().forEach(coin => {
             if (!coin.getData('canCollect')) return;

@@ -1208,7 +1208,7 @@ class Ninja {
         this.y = y;
         this.size = 35; // Hitbox size (smaller than sprite)
         this.spriteScale = 0.7; // Adjusted for 192x192 Archer_Blue sprites (was 1.0 for 128x128)
-        this.speed = 3; // Reduced from 5 to 3
+        this.speed = 180; // pixels per second (was 3 pixels per frame @ 60fps = 180 px/s)
         this.keys = {};
         this.shielded = false;
 
@@ -1305,23 +1305,26 @@ class Ninja {
             isMoving = true;
         } else {
             // Normal movement with world bounds checking (CAN MOVE WHILE ATTACKING!)
+            // deltaTime is in milliseconds, convert to seconds by dividing by 1000
+            const moveDistance = this.speed * (deltaTime / 1000);
+
             if (this.keys['ArrowUp'] || this.keys['w']) {
-                this.y = Math.max(this.size, this.y - this.speed);
+                this.y = Math.max(this.size, this.y - moveDistance);
                 moveY = -1;
                 isMoving = true;
             }
             if (this.keys['ArrowDown'] || this.keys['s']) {
-                this.y = Math.min(WORLD.height - this.size, this.y + this.speed);
+                this.y = Math.min(WORLD.height - this.size, this.y + moveDistance);
                 moveY = 1;
                 isMoving = true;
             }
             if (this.keys['ArrowLeft'] || this.keys['a']) {
-                this.x = Math.max(this.size, this.x - this.speed);
+                this.x = Math.max(this.size, this.x - moveDistance);
                 moveX = -1;
                 isMoving = true;
             }
             if (this.keys['ArrowRight'] || this.keys['d']) {
-                this.x = Math.min(WORLD.width - this.size, this.x + this.speed);
+                this.x = Math.min(WORLD.width - this.size, this.x + moveDistance);
                 moveX = 1;
                 isMoving = true;
             }
@@ -1415,7 +1418,15 @@ class Ninja {
             return false;
         }
 
-        this.health -= amount;
+        // 🛡️ Apply armor reduction
+        let finalDamage = amount;
+        if (this.armor && this.armor > 0) {
+            const damageReduction = this.armor; // armor is already a percentage (0.0 - 1.0)
+            finalDamage = amount * (1 - damageReduction);
+            console.log(`🛡️ Armor reduced damage: ${amount} → ${finalDamage.toFixed(1)} (${(damageReduction * 100).toFixed(0)}% reduction)`);
+        }
+
+        this.health -= finalDamage;
 
         // Trigger hurt animation (3 frames at 8 fps = 375ms)
         this.isHurt = true;
@@ -1579,7 +1590,7 @@ class Enemy {
         this.y = y;
         this.size = 30; // Hitbox size (increased from 25)
         this.spriteScale = 0.85; // Scale up sprites (larger for better visibility)
-        this.speed = 2.0;
+        this.speed = 120; // pixels per second (was 2.0 pixels per frame @ 60fps = 120 px/s)
         this.health = 1;
 
         // Death state
@@ -1639,9 +1650,10 @@ class Enemy {
         const distance = Math.sqrt(dx * dx + dy * dy);
 
         if (distance > 0) {
-            // Calculate desired movement
-            let moveX = (dx / distance) * this.speed;
-            let moveY = (dy / distance) * this.speed;
+            // Calculate desired movement (deltaTime in ms, convert to seconds)
+            const moveDistance = this.speed * (deltaTime / 1000);
+            let moveX = (dx / distance) * moveDistance;
+            let moveY = (dy / distance) * moveDistance;
 
             // Add separation force from nearby enemies
             let separationX = 0;
@@ -1858,8 +1870,8 @@ class BloodParticle {
     constructor(x, y) {
         this.x = x;
         this.y = y;
-        this.vx = (Math.random() - 0.5) * 4;
-        this.vy = (Math.random() - 0.5) * 4 - 2; // Upward bias
+        this.vx = (Math.random() - 0.5) * 240; // 240 px/s (was 4 px/frame @ 60fps)
+        this.vy = (Math.random() - 0.5) * 240 - 120; // Upward bias, 240 px/s range, -120 px/s offset
         this.size = Math.random() * 6 + 4; // Larger particles for realistic blood stains (4-10 pixels)
         this.lifetime = 0;
         this.maxLifetime = 1000; // 1 second
@@ -1869,15 +1881,20 @@ class BloodParticle {
     }
 
     update(deltaTime) {
+        const deltaSeconds = deltaTime / 1000;
+
         // Only update physics if not settled
         if (!this.settled) {
-            this.x += this.vx;
-            this.y += this.vy;
-            this.vy += 0.15; // Gravity
-            this.vx *= 0.98; // Air resistance
+            this.x += this.vx * deltaSeconds;
+            this.y += this.vy * deltaSeconds;
+            this.vy += 9 * 60 * deltaSeconds; // Gravity: 540 px/s² (was 0.15 px/frame² @ 60fps)
+
+            // Air resistance: convert per-frame to per-second
+            const airResistance = Math.pow(0.98, 60 * deltaSeconds);
+            this.vx *= airResistance;
 
             // Check if particle has settled (low velocity and has fallen)
-            if (Math.abs(this.vx) < 0.1 && this.vy > 0 && this.vy < 0.5 && this.lifetime > 200) {
+            if (Math.abs(this.vx) < 6 && this.vy > 0 && this.vy < 30 && this.lifetime > 200) {
                 this.settled = true;
                 this.settledY = this.y;
                 this.vx = 0;
@@ -2082,27 +2099,30 @@ class WoodDrop {
         this.spawnTime = performance.now();
         this.lifetime = 30000; // 30 seconds before auto-despawn
 
-        // Física: Velocidad inicial en dirección aleatoria
+        // Física: Velocidad inicial en dirección aleatoria (pixels per second)
         const angle = Math.random() * Math.PI * 2;
-        const speed = 6 + Math.random() * 8; // Velocidad aleatoria entre 6-14 (más disparada)
+        const speed = 360 + Math.random() * 480; // 360-840 px/s (was 6-14 px/frame @ 60fps)
         this.vx = Math.cos(angle) * speed;
         this.vy = Math.sin(angle) * speed;
-        this.friction = 0.92; // Desaceleración
+        this.friction = 0.92; // Desaceleración (per frame, will be converted to per-second)
         this.hasSettled = false; // Solo activar imán cuando la madera ha caído al suelo
     }
 
-    update(playerX, playerY) {
+    update(playerX, playerY, deltaTime) {
         const magnetRange = 120; // Rango de atracción magnética
         const dist = distance(this.x, this.y, playerX, playerY);
+        const deltaSeconds = deltaTime / 1000;
 
         // Si aún no se ha asentado, aplicar fricción para detenerse
         if (!this.hasSettled) {
-            this.vx *= this.friction;
-            this.vy *= this.friction;
+            // Convert per-frame friction to per-second: friction^(60*deltaSeconds)
+            const frictionFactor = Math.pow(this.friction, 60 * deltaSeconds);
+            this.vx *= frictionFactor;
+            this.vy *= frictionFactor;
 
             // Detectar cuando la madera se ha detenido (ha "caído al suelo")
             const currentSpeed = Math.sqrt(this.vx ** 2 + this.vy ** 2);
-            if (currentSpeed < 0.1) {
+            if (currentSpeed < 6) { // 6 px/s threshold (was 0.1 px/frame)
                 this.hasSettled = true;
                 this.vx = 0;
                 this.vy = 0;
@@ -2116,15 +2136,15 @@ class WoodDrop {
             const dy = playerY - this.y;
             const angle = Math.atan2(dy, dx);
 
-            // Fuerza de atracción aumenta cuando está más cerca
-            const attractionStrength = 0.3 + (1 - dist / magnetRange) * 0.5;
+            // Fuerza de atracción aumenta cuando está más cerca (acceleration in px/s²)
+            const attractionAccel = (18 + (1 - dist / magnetRange) * 30) * 60; // 1080-2880 px/s²
 
             // Aplicar fuerza de atracción
-            this.vx += Math.cos(angle) * attractionStrength;
-            this.vy += Math.sin(angle) * attractionStrength;
+            this.vx += Math.cos(angle) * attractionAccel * deltaSeconds;
+            this.vy += Math.sin(angle) * attractionAccel * deltaSeconds;
 
             // Limitar velocidad máxima cuando es atraída
-            const maxSpeed = 8;
+            const maxSpeed = 480; // 480 px/s (was 8 px/frame @ 60fps)
             const currentSpeed = Math.sqrt(this.vx ** 2 + this.vy ** 2);
             if (currentSpeed > maxSpeed) {
                 this.vx = (this.vx / currentSpeed) * maxSpeed;
@@ -2133,8 +2153,8 @@ class WoodDrop {
         }
 
         // Aplicar velocidad a la posición
-        this.x += this.vx;
-        this.y += this.vy;
+        this.x += this.vx * deltaSeconds;
+        this.y += this.vy * deltaSeconds;
     }
 
     draw() {
@@ -2201,41 +2221,42 @@ class WoodSellParticle {
         this.spawnTime = performance.now();
         this.collected = false;
 
-        // Velocidad inicial hacia el vendedor
+        // Velocidad inicial hacia el vendedor (pixels per second)
         const dx = targetX - startX;
         const dy = targetY - startY;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        const speed = 8;
+        const speed = 480; // 480 px/s (was 8 px/frame @ 60fps)
         this.vx = (dx / dist) * speed;
         this.vy = (dy / dist) * speed;
     }
 
-    update() {
+    update(deltaTime) {
         // Efecto imán hacia el vendedor (atracción fuerte)
         const dx = this.targetX - this.x;
         const dy = this.targetY - this.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
+        const deltaSeconds = deltaTime / 1000;
 
         // Radio de absorción aumentado para prevenir órbita (debe ser mayor que maxSpeed)
         const absorptionRadius = 20;
 
         if (dist > absorptionRadius) {
             const angle = Math.atan2(dy, dx);
-            const attractionStrength = 0.8; // Atracción fuerte
+            const attractionAccel = 48 * 60; // 2880 px/s² (was 0.8 px/frame² @ 60fps)
 
-            this.vx += Math.cos(angle) * attractionStrength;
-            this.vy += Math.sin(angle) * attractionStrength;
+            this.vx += Math.cos(angle) * attractionAccel * deltaSeconds;
+            this.vy += Math.sin(angle) * attractionAccel * deltaSeconds;
 
             // Limitar velocidad
-            const maxSpeed = 15;
+            const maxSpeed = 900; // 900 px/s (was 15 px/frame @ 60fps)
             const currentSpeed = Math.sqrt(this.vx ** 2 + this.vy ** 2);
             if (currentSpeed > maxSpeed) {
                 this.vx = (this.vx / currentSpeed) * maxSpeed;
                 this.vy = (this.vy / currentSpeed) * maxSpeed;
             }
 
-            this.x += this.vx;
-            this.y += this.vy;
+            this.x += this.vx * deltaSeconds;
+            this.y += this.vy * deltaSeconds;
         } else {
             // Llegó al vendedor - radio de absorción aumentado previene órbita
             this.collected = true;
@@ -2857,13 +2878,13 @@ function gameLoop(timestamp) {
 
         // Update wood drops physics (con efecto imán)
         for (let wood of woodDrops) {
-            wood.update(ninja.x, ninja.y);
+            wood.update(ninja.x, ninja.y, deltaTime);
         }
 
         // Update wood sell particles (venta al vendedor)
         for (let i = woodSellParticles.length - 1; i >= 0; i--) {
             const particle = woodSellParticles[i];
-            particle.update();
+            particle.update(deltaTime);
 
             // Si llegó al vendedor, dar oro y eliminar partícula
             if (particle.collected) {

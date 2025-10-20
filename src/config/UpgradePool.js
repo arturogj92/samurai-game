@@ -12,13 +12,18 @@ export const UPGRADE_POOL = {
         description: 'Reduce attack cooldown by {amount}%',
         icon: '⚡',
         category: 'attack',
-        maxLevel: 5,
+        maxLevel: 10,
         levels: [
-            { level: 1, amount: 10, price: 15 },  // 🎯 -33% (was 20)
-            { level: 2, amount: 20, price: 25 },  // 🎯 -29% (was 35)
-            { level: 3, amount: 30, price: 55 },
-            { level: 4, amount: 40, price: 80 },
-            { level: 5, amount: 50, price: 120 }
+            { level: 1, amount: 15, price: 15 },   // ⚡ Fire rate: 350ms → 304ms (1.15x)
+            { level: 2, amount: 30, price: 25 },   // ⚡ Fire rate: 350ms → 269ms (1.3x)
+            { level: 3, amount: 45, price: 40 },   // ⚡ Fire rate: 350ms → 241ms (1.45x)
+            { level: 4, amount: 60, price: 60 },   // ⚡ Fire rate: 350ms → 219ms (1.6x)
+            { level: 5, amount: 75, price: 85 },   // ⚡ Fire rate: 350ms → 200ms (1.75x)
+            { level: 6, amount: 100, price: 115 }, // ⚡⚡ Fire rate: 350ms → 175ms (2x)
+            { level: 7, amount: 125, price: 150 }, // ⚡⚡ Fire rate: 350ms → 156ms (2.25x)
+            { level: 8, amount: 150, price: 200 }, // ⚡⚡ Fire rate: 350ms → 140ms (2.5x)
+            { level: 9, amount: 200, price: 270 }, // ⚡⚡⚡ Fire rate: 350ms → 117ms (3x)
+            { level: 10, amount: 300, price: 400 } // ⚡⚡⚡⚡ Fire rate: 350ms → 87ms (4x) MÁXIMO!
         ]
     },
 

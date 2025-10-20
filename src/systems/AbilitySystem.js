@@ -60,9 +60,9 @@ export default class AbilitySystem {
                 enabled: true
             },
             infinityArrows: {
-                cooldown: 35000, // 35 seconds cooldown (ultimate ability)
+                cooldown: 30000, // 30 seconds cooldown (ultimate ability) - Reduced from 35s
                 lastUsed: -999999,
-                duration: 2000, // 2 seconds active
+                duration: 4000, // 4 seconds active - DOUBLED from 2s for BESTIA MODE
                 enabled: true
             }
         };
@@ -599,14 +599,20 @@ export default class AbilitySystem {
         if (!ability.enabled) return false;
 
         let timeSinceUse = time - ability.lastUsed;
+        let effectiveCooldown = ability.cooldown;
+
+        // ⚡ Apply player cooldown reduction upgrade
+        if (this.scene.player && this.scene.player.cooldownReduction && this.scene.player.cooldownReduction > 0) {
+            effectiveCooldown = ability.cooldown * (1 - this.scene.player.cooldownReduction);
+        }
 
         // Berserker mode: cooldowns recover 4x faster (75% cooldown reduction)
         if (this.berserkerActive && abilityName !== 'berserker') {
             timeSinceUse *= 4; // Effectively cuts cooldown time to 25%
         }
 
-        if (timeSinceUse < ability.cooldown) {
-            const remaining = Math.ceil((ability.cooldown - timeSinceUse) / 1000);
+        if (timeSinceUse < effectiveCooldown) {
+            const remaining = Math.ceil((effectiveCooldown - timeSinceUse) / 1000);
             console.log(`⏱️ ${abilityName} on cooldown: ${remaining}s remaining`);
             return false;
         }
@@ -622,15 +628,21 @@ export default class AbilitySystem {
         const ability = this.abilities[abilityName];
         const time = this.scene.time.now;
         let timeSinceUse = time - ability.lastUsed;
+        let effectiveCooldown = ability.cooldown;
+
+        // ⚡ Apply player cooldown reduction upgrade
+        if (this.scene.player && this.scene.player.cooldownReduction && this.scene.player.cooldownReduction > 0) {
+            effectiveCooldown = ability.cooldown * (1 - this.scene.player.cooldownReduction);
+        }
 
         // Berserker mode: cooldowns recover 4x faster (75% cooldown reduction)
         if (this.berserkerActive && abilityName !== 'berserker') {
             timeSinceUse *= 4; // Effectively cuts cooldown time to 25%
         }
 
-        if (timeSinceUse >= ability.cooldown) return 1; // Ready
+        if (timeSinceUse >= effectiveCooldown) return 1; // Ready
 
-        return timeSinceUse / ability.cooldown;
+        return timeSinceUse / effectiveCooldown;
     }
 
     /**
@@ -2892,7 +2904,7 @@ export default class AbilitySystem {
     }
 
     /**
-     * INFINITY ARROWS ABILITY (C) - 2.5x fire rate for 2 seconds (ULTIMATE)
+     * INFINITY ARROWS ABILITY (C) - 8x fire rate for 4 seconds (ULTIMATE BESTIA MODE)
      */
     infinityArrows(time) {
         if (!this.canUseAbility('infinityArrows', time)) return false;
@@ -2911,13 +2923,13 @@ export default class AbilitySystem {
         // Set flag on player so AutoFireSystem can bypass animation delay
         player.infinityArrowsActive = true;
 
-        // Apply 2.5x fire rate multiplier (affects both player and minions)
-        player.fireRateMultiplier = 2.5;
+        // Apply 8x fire rate multiplier (affects both player and minions) - BESTIA MODE!
+        player.fireRateMultiplier = 8.0;
         if (this.scene.autoFireSystem) {
-            this.scene.autoFireSystem.fireRate = this.originalAutoFireCooldown / 2.5;
+            this.scene.autoFireSystem.fireRate = this.originalAutoFireCooldown / 8.0;
         }
 
-        // Reduce damage by 30% to balance fire rate boost
+        // Reduce damage by 30% to balance the extreme fire rate
         player.damageMultiplier = 0.7;
 
         // Create subtle activation effects (just rings, no aura)
@@ -2929,7 +2941,7 @@ export default class AbilitySystem {
         });
 
         this.abilities.infinityArrows.lastUsed = time;
-        console.log('♾️ INFINITY ARROWS ACTIVATED! Fire rate: 2.5x, Damage: -30% for 2 seconds (affects player + minions)!');
+        console.log('♾️ INFINITY ARROWS ACTIVATED! Fire rate: 8x, Damage: -30% (balanced) for 4 seconds (affects player + minions)!');
         return true;
     }
 

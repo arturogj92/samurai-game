@@ -113,7 +113,7 @@ export default class MainScene extends Phaser.Scene {
         });
         this.projectiles = this.physics.add.group({
             classType: Projectile,
-            runChildUpdate: true
+            runChildUpdate: false  // Disabled - we update manually to get correct delta time
         });
         this.bamboos = this.add.group();
         this.woodDrops = this.physics.add.group();
@@ -992,6 +992,11 @@ export default class MainScene extends Phaser.Scene {
             goldValue = Math.floor(goldValue * 1.2);
         }
 
+        // 💰 Apply gold bonus upgrade
+        if (this.player.goldBonus && this.player.goldBonus > 0) {
+            goldValue = Math.floor(goldValue * (1 + this.player.goldBonus));
+        }
+
         // 🍀 LUCK SYSTEM: Check for double gold proc!
         let finalGoldValue = goldValue;
         let luckProc = false;
@@ -1071,8 +1076,13 @@ export default class MainScene extends Phaser.Scene {
         // Magnetic pull for health potions - same system as gold
         if (!this.player || !this.healthPotions) return;
 
-        const magnetRange = 150; // Same range as gold
+        let magnetRange = 150; // Base range
         const magnetStrength = 300; // Pull speed
+
+        // 🧲 Apply pickup radius multiplier upgrade
+        if (this.player.pickupRadiusMultiplier && this.player.pickupRadiusMultiplier > 1.0) {
+            magnetRange = magnetRange * this.player.pickupRadiusMultiplier;
+        }
 
         this.healthPotions.getChildren().forEach(potion => {
             // Only attract potions that have finished their spawn animation
@@ -1133,6 +1143,14 @@ export default class MainScene extends Phaser.Scene {
         this.collisionSystem.update(); // RAYCAST collision detection
         this.upgradeSystem.update(time); // Handle regeneration and other upgrade effects
         this.comboSystem.update(time); // 🔥 Check for streak timeout
+
+        // CRITICAL: Manually update projectiles with correct delta time
+        // runChildUpdate has a bug where it doesn't pass delta correctly on different refresh rates
+        this.projectiles.getChildren().forEach(projectile => {
+            if (projectile.active && projectile.preUpdate) {
+                projectile.preUpdate(time, delta);
+            }
+        });
 
         // Update mini archers (summoned allies)
         if (this.miniArchers && this.miniArchers.length > 0) {

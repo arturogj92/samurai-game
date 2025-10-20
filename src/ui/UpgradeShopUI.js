@@ -350,7 +350,7 @@ export default class UpgradeShopUI {
                 const autoFire = this.scene.autoFireSystem;
                 if (!autoFire) return;
 
-                const baseFireRate = 500; // Base fire rate from AutoFireSystem
+                const baseFireRate = 350; // Base fire rate from AutoFireSystem
 
                 // Current fire rate with current level
                 let currentFireRate = baseFireRate;

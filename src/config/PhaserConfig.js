@@ -9,11 +9,19 @@ export const GameConfig = {
     parent: 'game-container',
     width: window.innerWidth,
     height: window.innerHeight,
+    fps: {
+        target: 60,                  // Target 60 FPS
+        forceSetTimeOut: false,      // Use requestAnimationFrame
+        min: 30,                     // Minimum FPS before slowdown
+        smoothStep: false            // CRITICAL: Disable smooth step to prevent double-speed on high refresh
+    },
     physics: {
         default: 'arcade',
         arcade: {
-            gravity: { y: 0 }, // Top-down game, no gravity
-            debug: false // Debug mode disabled
+            gravity: { y: 0 },       // Top-down game, no gravity
+            debug: false,            // Debug mode disabled
+            fixedStep: false,        // CRITICAL: Must be false for frame-rate independence
+            fps: 60                  // Physics update rate (only used if fixedStep is true)
         }
     },
     scene: [BootScene, MainScene, UIScene, RestScreen],

@@ -23,6 +23,11 @@ export default class AutoFireSystem {
         // Calculate effective fire rate (apply rapid fire multiplier if active)
         let effectiveFireRate = this.fireRate;
 
+        // 💪 Apply player attack speed upgrade (from permanent upgrades)
+        if (this.scene.player && this.scene.player.baseAttackSpeed) {
+            effectiveFireRate = effectiveFireRate / this.scene.player.baseAttackSpeed; // Higher attackSpeed = lower cooldown
+        }
+
         // 🔥 Apply player power scaling bonus (fire rate increases with level)
         if (this.scene.difficultySystem) {
             const playerPower = this.scene.difficultySystem.getPlayerPowerScaling();
@@ -122,8 +127,25 @@ export default class AutoFireSystem {
         }
 
         const damageMultiplier = this.scene.player.damageMultiplier || 1.0;
-        projectile.damage = baseDamage * damageMultiplier;
-        const speed = 400; // 🔥 Increased from 320 to 400 (+25% speed for more impact!)
+        let finalDamage = baseDamage * damageMultiplier;
+
+        // 💥 Apply critical strike chance
+        if (this.scene.player.critChance && this.scene.player.critChance > 0) {
+            const critRoll = Math.random();
+            if (critRoll < this.scene.player.critChance) {
+                finalDamage = finalDamage * 2; // Critical hit! 2x damage
+                projectile.isCritical = true; // Mark as critical for visual effects
+                console.log(`💥 CRITICAL HIT! Damage: ${baseDamage * damageMultiplier} → ${finalDamage}`);
+            }
+        }
+
+        projectile.damage = finalDamage;
+        let speed = 400; // 🔥 Increased from 320 to 400 (+25% speed for more impact!)
+
+        // 🏹 Apply projectile speed bonus
+        if (this.scene.player.projectileSpeedBonus && this.scene.player.projectileSpeedBonus > 0) {
+            speed = speed * (1 + this.scene.player.projectileSpeedBonus);
+        }
 
         const velocityX = Math.cos(angle) * speed;
         const velocityY = Math.sin(angle) * speed;
@@ -215,14 +237,22 @@ export default class AutoFireSystem {
         // Play the animation
         player.play(animKey, true);
 
-        // Speed up animation during rapid fire or infinity arrows
-        if (player.infinityArrowsActive) {
-            player.anims.timeScale = 2.5; // 2.5x faster animation
-        } else if (this.scene.abilitySystem && this.scene.abilitySystem.rapidFireActive) {
-            player.anims.timeScale = 3.0; // 3x faster animation for rapid fire (even faster than infinity!)
-        } else {
-            player.anims.timeScale = 1; // Normal speed
+        // Speed up animation based on attack speed upgrades
+        let animSpeed = 1.0;
+
+        // Apply attack speed multiplier
+        if (player.baseAttackSpeed) {
+            animSpeed = player.baseAttackSpeed; // Match the fire rate boost
         }
+
+        // Speed up even more during abilities
+        if (player.infinityArrowsActive) {
+            animSpeed *= 5.0; // 5x faster on top of base speed - BESTIA MODE!
+        } else if (this.scene.abilitySystem && this.scene.abilitySystem.rapidFireActive) {
+            animSpeed *= 3.0; // 3x faster on top of base speed
+        }
+
+        player.anims.timeScale = animSpeed;
 
         // Mark that we're shooting
         player.isShooting = true;

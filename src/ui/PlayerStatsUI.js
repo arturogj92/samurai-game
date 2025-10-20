@@ -99,7 +99,7 @@ export default class PlayerStatsUI {
         const BASE_MAX_HEALTH = 100;
         const BASE_SPEED = 200;
         const BASE_DAMAGE = 1.0;
-        const BASE_FIRE_RATE = 500;
+        const BASE_FIRE_RATE = 350; // Match AutoFireSystem base
 
         // Health (current, not base comparison)
         this.statsTexts.health.setText(Math.floor(player.health));
@@ -144,8 +144,14 @@ export default class PlayerStatsUI {
         }
 
         // Fire Rate (raw cooldown in ms)
-        let effectiveFireRate = autoFire.fireRate;
-        const baseFireRate = BASE_FIRE_RATE;
+        let baseFireRateWithUpgrades = autoFire.fireRate;
+
+        // Apply player attack speed upgrade
+        if (player.baseAttackSpeed) {
+            baseFireRateWithUpgrades = baseFireRateWithUpgrades / player.baseAttackSpeed;
+        }
+
+        let effectiveFireRate = baseFireRateWithUpgrades;
 
         // Apply player power scaling
         if (this.scene.difficultySystem) {
@@ -162,8 +168,8 @@ export default class PlayerStatsUI {
         if (!this.previewActive || this.previewStat !== 'fireRate') {
             const current = Math.floor(effectiveFireRate);
             // For fire rate, lower is better, so we show reduction
-            const improvement = baseFireRate - autoFire.fireRate; // Positive means faster
-            if (improvement > 0 && !rapidFireActive) {
+            const improvement = BASE_FIRE_RATE - baseFireRateWithUpgrades; // Positive means faster
+            if (improvement > 1 && !rapidFireActive) {
                 this.statsTexts.fireRate.setText(`${current}ms (-${Math.floor(improvement)})`);
                 this.statsTexts.fireRate.setColor('#00FF88');
             } else {
@@ -175,10 +181,11 @@ export default class PlayerStatsUI {
         // Attack Speed (attacks per second)
         const attacksPerSecond = (1000 / effectiveFireRate).toFixed(2);
         if (!this.previewActive || this.previewStat !== 'attackSpeed') {
-            const baseAttacksPerSec = (1000 / baseFireRate).toFixed(2);
+            const baseAttacksPerSec = (1000 / BASE_FIRE_RATE).toFixed(2);
+            const baseAttacksWithUpgrades = (1000 / baseFireRateWithUpgrades).toFixed(2);
             const current = parseFloat(attacksPerSecond);
             const base = parseFloat(baseAttacksPerSec);
-            const bonus = current - base;
+            const bonus = parseFloat(baseAttacksWithUpgrades) - base;
 
             if (bonus > 0.01 && !rapidFireActive) {
                 this.statsTexts.attackSpeed.setText(`${attacksPerSecond} (+${bonus.toFixed(2)})`);
