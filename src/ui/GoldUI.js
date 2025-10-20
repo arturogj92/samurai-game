@@ -6,23 +6,23 @@ export default class GoldUI {
     constructor(scene) {
         this.scene = scene;
 
-        // Position centered above ability bar
-        const x = this.scene.cameras.main.width / 2; // Center of screen
-        const y = this.scene.cameras.main.height - 95; // Above ability bar
+        // Position at top right corner
+        const x = this.scene.cameras.main.width - 30; // Right edge with padding
+        const y = 25; // Top with padding
 
         // Create gold icon (using G_Idle.png)
-        this.goldIcon = this.scene.add.image(x - 25, y + 1, 'gold-idle');
+        this.goldIcon = this.scene.add.image(x - 65, y - 3, 'gold-idle');
         this.goldIcon.setScrollFactor(0); // Fixed to camera
-        this.goldIcon.setScale(0.5); // Icon (128px -> 64px)
-        this.goldIcon.setOrigin(0.5, 0.6); // Adjust origin to account for transparent space at top
+        this.goldIcon.setScale(0.6); // Icon (128px -> ~77px) - slightly larger for visibility
+        this.goldIcon.setOrigin(0.5, 0.5);
         this.goldIcon.setDepth(10000); // Always on top of everything (UI layer)
 
-        // Create gold text (to the right of icon, very close)
-        this.goldText = this.scene.add.text(x + 3, y + 2, '0', {
-            font: 'bold 26px Arial',
+        // Create gold text (to the right of icon)
+        this.goldText = this.scene.add.text(x - 30, y, '0', {
+            font: 'bold 32px Arial',
             fill: '#FFD700',
             stroke: '#000000',
-            strokeThickness: 3
+            strokeThickness: 4
         });
         this.goldText.setScrollFactor(0);
         this.goldText.setOrigin(0, 0.5); // Left aligned, vertically centered
@@ -32,7 +32,7 @@ export default class GoldUI {
         this.isVibrating = false;
         this.vibrationTimer = 0;
         this.originalX = x;
-        this.originalY = y;
+        this.originalY = y - 3; // Adjusted for icon alignment
     }
 
     update() {
@@ -52,14 +52,14 @@ export default class GoldUI {
                 const offsetY = (Math.random() - 0.5) * shakeAmount;
 
                 this.goldIcon.setPosition(
-                    this.originalX - 25 + offsetX,
-                    this.originalY + 1 + offsetY
+                    this.originalX - 65 + offsetX,
+                    this.originalY + offsetY
                 );
             } else {
                 // Reset position and stop vibrating
                 this.goldIcon.setPosition(
-                    this.originalX - 25,
-                    this.originalY + 1
+                    this.originalX - 65,
+                    this.originalY
                 );
                 this.isVibrating = false;
                 this.vibrationTimer = 0;
