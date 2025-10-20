@@ -1892,12 +1892,24 @@ Damage Dealt: ${Math.floor(this.levelSystem.stats.damageDealt)}`,
     /**
      * Generate random shop abilities for the current level
      * These abilities stay the same throughout the level to prevent shop reroll exploit
+     * Excludes both owned abilities and equipped abilities
      */
     generateShopAbilities() {
         const { getRandomAbilities } = require('../config/AbilityPool.js');
+
+        // Get owned abilities
         const ownedIds = this.gameState.ownedAbilities || [];
-        this.gameState.availableAbilitiesThisLevel = getRandomAbilities(3, ownedIds);
+
+        // Get equipped abilities from slots
+        const equippedIds = Object.values(this.gameState.abilitySlots || {})
+            .filter(id => id !== null); // Filter out empty slots
+
+        // Combine owned and equipped (remove duplicates with Set)
+        const excludedIds = [...new Set([...ownedIds, ...equippedIds])];
+
+        this.gameState.availableAbilitiesThisLevel = getRandomAbilities(3, excludedIds);
 
         console.log(`🛒 Generated ${this.gameState.availableAbilitiesThisLevel.length} shop abilities for Level ${this.levelSystem.currentLevel}`);
+        console.log(`   Excluded ${excludedIds.length} abilities (owned + equipped):`, excludedIds);
     }
 }
