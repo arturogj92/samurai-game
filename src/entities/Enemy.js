@@ -146,22 +146,27 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
             hpMultiplier = 0.85; // Level 3-4: -15% HP (balanced)
         }
 
+        // Get level config for progressive difficulty scaling (levels 6+)
+        const levelConfig = this.scene?.levelSystem?.getCurrentLevelConfig();
+        const enemySpeedMultiplier = levelConfig?.enemySpeedMultiplier || 1.0;
+        const enemyAttackRateMultiplier = levelConfig?.enemyAttackRateMultiplier || 1.0;
+
         switch (this.enemyType) {
             case 'skull':
                 this.health = Math.floor(132 * hpMultiplier); // Scales with level
                 this.maxHealth = this.health;
-                this.speed = 99; // Moderate speed
+                this.speed = Math.floor(99 * enemySpeedMultiplier); // Progressive speed scaling
                 this.damage = 33; // Devastating damage
-                this.attackCooldown = 1364; // Faster attack rate
+                this.attackCooldown = Math.floor(1364 * enemyAttackRateMultiplier); // Progressive attack rate
                 this.goldMin = 12; // 💰 High gold reward (x3)
                 this.goldMax = 20; // 💰 (was 4-7, now 12-20)
                 break;
             case 'lancer':
                 this.health = Math.floor(88 * hpMultiplier); // Scales with level
                 this.maxHealth = this.health;
-                this.speed = 110; // Faster than goblin
+                this.speed = Math.floor(110 * enemySpeedMultiplier); // Progressive speed scaling
                 this.damage = 17;
-                this.attackCooldown = 1091; // ms
+                this.attackCooldown = Math.floor(1091 * enemyAttackRateMultiplier); // Progressive attack rate
                 this.goldMin = 6; // 💰 Medium gold reward (x3)
                 this.goldMax = 12; // 💰 (was 2-4, now 6-12)
                 break;
@@ -169,9 +174,9 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
             default:
                 this.health = Math.floor(55 * hpMultiplier); // Scales with level
                 this.maxHealth = this.health;
-                this.speed = 88; // Slower than player
+                this.speed = Math.floor(88 * enemySpeedMultiplier); // Progressive speed scaling
                 this.damage = 11;
-                this.attackCooldown = 909; // ms
+                this.attackCooldown = Math.floor(909 * enemyAttackRateMultiplier); // Progressive attack rate
                 this.goldMin = 3; // 💰 Low gold reward (x3)
                 this.goldMax = 6; // 💰 (was 1-2, now 3-6)
                 break;
@@ -181,6 +186,11 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
         // Log HP scaling for debugging
         if (currentLevel <= 4) {
             console.log(`🎯 Level ${currentLevel}: ${this.enemyType} HP scaled to ${this.health} (${Math.floor(hpMultiplier * 100)}%)`);
+        }
+
+        // Log difficulty scaling for levels 6+ (infinite mode)
+        if (currentLevel >= 6 && (enemySpeedMultiplier !== 1.0 || enemyAttackRateMultiplier !== 1.0)) {
+            console.log(`⚡ Level ${currentLevel}: ${this.enemyType} Speed: ${this.speed} (x${enemySpeedMultiplier.toFixed(2)}), Attack CD: ${this.attackCooldown}ms (x${enemyAttackRateMultiplier.toFixed(2)})`);
         }
     }
 

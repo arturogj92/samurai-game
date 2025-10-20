@@ -961,9 +961,13 @@ export default class MainScene extends Phaser.Scene {
             goldCoin.setData('canCollect', true); // Mark as ready for magnetic collection
         });
 
-        // 💊 8% chance to drop health potion when collecting skull
-        if (Math.random() < 0.08) {
-            console.log('💊 Health potion spawned from skull at', skullX, skullY);
+        // 💊 Dynamic potion drop rate (scales with level difficulty)
+        // Base 8% for levels 1-5, decreases for higher levels
+        const levelConfig = this.levelSystem.getCurrentLevelConfig();
+        const potionDropRate = levelConfig?.potionDropRate || 0.08;
+
+        if (Math.random() < potionDropRate) {
+            console.log(`💊 Health potion spawned (${(potionDropRate * 100).toFixed(1)}% chance) at`, skullX, skullY);
             const potion = new HealthPotion(this, skullX, skullY);
             this.healthPotions.add(potion);
         }
