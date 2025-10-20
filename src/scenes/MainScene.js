@@ -1812,16 +1812,20 @@ Time: ${minutes}m ${seconds}s`,
         gameOverText.setScrollFactor(0);
         gameOverText.setDepth(20001);
 
-        // Score text
+        // Statistics text with level and damage
         const scoreText = this.add.text(
             this.cameras.main.width / 2,
             280,
-            `Score: ${this.gameState.score}\nEnemies Killed: ${this.gameState.enemiesKilled}`,
+            `Score: ${this.gameState.score}
+Enemies Killed: ${this.gameState.enemiesKilled}
+Level Reached: ${this.levelSystem.currentLevel}
+Damage Dealt: ${Math.floor(this.levelSystem.stats.damageDealt)}`,
             {
                 fontSize: '24px',
                 fontFamily: 'Arial',
                 color: '#ffffff',
-                align: 'center'
+                align: 'center',
+                lineSpacing: 4
             }
         );
         scoreText.setOrigin(0.5);

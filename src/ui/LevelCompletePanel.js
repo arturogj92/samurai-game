@@ -17,10 +17,8 @@ export default class LevelCompletePanel {
         if (this.isVisible) return;
         this.isVisible = true;
 
-        // Hide health bar while this panel is shown (now in MainScene)
-        if (this.scene.hideHealthBar) {
-            this.scene.hideHealthBar();
-        }
+        // Keep health bar visible during rest screen
+        // (Previously hidden, but now stays visible for better UX)
 
         const { width, height } = this.scene.cameras.main;
         const stats = this.levelSystem.getStats();
@@ -599,10 +597,7 @@ export default class LevelCompletePanel {
     }
 
     hide() {
-        // Show health bar again (now in MainScene)
-        if (this.scene.showHealthBar) {
-            this.scene.showHealthBar();
-        }
+        // Health bar stays visible now, no need to show/hide
 
         if (this.container) {
             this.container.destroy();
