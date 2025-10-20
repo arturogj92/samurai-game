@@ -211,13 +211,14 @@ export default class UpgradeSystem {
                     const newHealth = Math.min(currentHealth + this.scene.player.regenAmount, maxHealth);
                     this.scene.player.health = newHealth;
 
-                    // Show heal number
+                    // Show heal number (using spawnDamageNumber with negative value indicates healing)
                     if (this.scene.damageNumberSystem) {
-                        this.scene.damageNumberSystem.showNumber(
+                        this.scene.damageNumberSystem.spawnDamageNumber(
                             this.scene.player.x,
                             this.scene.player.y - 30,
-                            `+${this.scene.player.regenAmount}`,
-                            '#00FF00'
+                            this.scene.player.regenAmount,
+                            false,  // not critical
+                            false   // not player damage (it's healing)
                         );
                     }
 
