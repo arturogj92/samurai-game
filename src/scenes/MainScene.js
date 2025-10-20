@@ -7,6 +7,7 @@ import Tree from '../entities/Tree';
 import Bush from '../entities/Bush';
 import Rock from '../entities/Rock';
 import Sheep from '../entities/Sheep';
+import HealthPotion from '../entities/HealthPotion';
 import AutoFireSystem from '../systems/AutoFireSystem';
 import EnemySpawnSystem from '../systems/EnemySpawnSystem';
 import CollisionSystem from '../systems/CollisionSystem';
@@ -16,16 +17,41 @@ import BloodParticleSystem from '../systems/BloodParticleSystem';
 import TilemapManager from '../systems/TilemapManager';
 import GoldCollectionEffects from '../systems/GoldCollectionEffects';
 import PathfindingSystem from '../systems/PathfindingSystem';
+import LevelSystem from '../systems/LevelSystem';
+import DifficultySystem from '../systems/DifficultySystem';
+import UpgradeSystem from '../systems/UpgradeSystem';
+import AbilityUpgradeSystem from '../systems/AbilityUpgradeSystem';
+import ComboSystem from '../systems/ComboSystem'; // 🔥 NEW: Kill streak system
 import AbilityBarUI from '../ui/AbilityBarUI';
 import GoldUI from '../ui/GoldUI';
+import LevelCompletePanel from '../ui/LevelCompletePanel';
+import AbilityShopUI from '../ui/AbilityShopUI';
+import StartingAbilitySelectionUI from '../ui/StartingAbilitySelectionUI';
+import SlotAssignmentUI from '../ui/SlotAssignmentUI';
+import UpgradeShopUI from '../ui/UpgradeShopUI';
+import AbilityUpgradeUI from '../ui/AbilityUpgradeUI';
+import PlayerStatsUI from '../ui/PlayerStatsUI';
+import { ABILITY_POOL, getRandomAbilities } from '../config/AbilityPool';
 
 export default class MainScene extends Phaser.Scene {
     constructor() {
         super({ key: 'MainScene' });
     }
 
+    init(data) {
+        // Receive or create LevelSystem
+        this.levelSystem = data.levelSystem || new LevelSystem();
+        console.log('📊 Starting Level', this.levelSystem.currentLevel);
+    }
+
     create() {
         console.log('✅ MainScene: Scene started');
+
+        // Start tracking level statistics
+        this.levelSystem.startLevel();
+
+        // Set custom cursor (crosshair style)
+        this.input.setDefaultCursor('crosshair');
 
         // Create world bounds (larger than viewport)
         this.physics.world.setBounds(0, 0, WORLD.width, WORLD.height);
@@ -34,8 +60,11 @@ export default class MainScene extends Phaser.Scene {
         this.createBackground();
 
         // Initialize game state
+        // On level 1, start paused if player hasn't chosen starting ability yet
+        const shouldStartPaused = this.levelSystem.currentLevel === 1;
+
         this.gameState = {
-            playing: true,
+            playing: !shouldStartPaused, // false on level 1, true on level 2+
             score: 0,
             wave: 1,
             enemiesKilled: 0,
@@ -47,12 +76,35 @@ export default class MainScene extends Phaser.Scene {
             },
             axeMode: false,
             shopOpen: false,
-            purchasesThisWave: 0
+            purchasesThisWave: 0,
+
+            // NEW SLOT-BASED ABILITY SYSTEM
+            abilitySlots: {
+                Q: null, // Empty slot
+                E: null,
+                R: null,
+                T: null,
+                F: null
+            },
+            ownedAbilities: [], // Abilities player owns but hasn't assigned to slots yet
+            availableAbilitiesThisLevel: [], // 3 random abilities shown in shop this level
+            hasChosenStartingAbility: false // Track if player chose starting ability
         };
+
+        // PERFORMANCE: Global enemy limit to prevent FPS degradation
+        this.MAX_ENEMIES = 50; // Maximum concurrent enemies (prevents infinite spawning lag)
+        this.enemyCleanupDistance = 1000; // Clean up enemies beyond this distance from player
 
         // Game over/victory flags
         this.gameOverShown = false;
         this.victoryShown = false;
+
+        // Pause physics immediately on level 1 before creating huts
+        // This prevents initial guard spawning before ability selection
+        if (shouldStartPaused) {
+            this.physics.pause();
+            console.log('⏸️ Game paused on level 1 - waiting for ability selection');
+        }
 
         // Groups for game objects
         this.enemies = this.physics.add.group({
@@ -67,12 +119,13 @@ export default class MainScene extends Phaser.Scene {
         this.woodDrops = this.physics.add.group();
         this.skulls = this.physics.add.group(); // Collectible skulls from dead enemies
         this.goldCoins = this.physics.add.group(); // Gold coins from collected skulls
+        this.healthPotions = this.physics.add.group({ classType: HealthPotion }); // Health potions from enemies
         this.goblinHuts = this.physics.add.group({
             runChildUpdate: true
         }); // Goblin spawning buildings
-        this.trees = this.add.group(); // Terrain decorations
-        this.bushes = this.add.group(); // Bush decorations
-        this.rocks = this.add.group(); // Rock decorations
+        this.trees = this.physics.add.staticGroup(); // Terrain decorations with collision
+        this.bushes = this.add.group(); // Bush decorations (no collision)
+        this.rocks = this.physics.add.staticGroup(); // Rock decorations with collision
         this.sheep = this.add.group(); // Sheep creatures
 
         // Create player
@@ -87,10 +140,29 @@ export default class MainScene extends Phaser.Scene {
         this.damageNumberSystem = new DamageNumberSystem(this);
         this.bloodParticleSystem = new BloodParticleSystem(this);
         this.goldCollectionEffects = new GoldCollectionEffects(this);
+        this.difficultySystem = new DifficultySystem(this);
+        this.difficultySystem.logDifficulty(); // Log current difficulty settings
+
+        // Initialize upgrade systems
+        this.upgradeSystem = new UpgradeSystem(this);
+        this.abilityUpgradeSystem = new AbilityUpgradeSystem(this);
+
+        // 🔥 Initialize combo/streak system
+        this.comboSystem = new ComboSystem(this);
+
+        // Apply any existing upgrades to player stats
+        this.upgradeSystem.applyUpgrades();
 
         // Initialize UI
         this.abilityBarUI = new AbilityBarUI(this, this.abilitySystem);
         this.goldUI = new GoldUI(this);
+        this.levelCompletePanel = new LevelCompletePanel(this, this.levelSystem);
+        this.abilityShopUI = new AbilityShopUI(this);
+        this.startingAbilitySelectionUI = new StartingAbilitySelectionUI(this);
+        this.slotAssignmentUI = new SlotAssignmentUI(this);
+        this.upgradeShopUI = new UpgradeShopUI(this);
+        this.abilityUpgradeUI = new AbilityUpgradeUI(this);
+        this.playerStatsUI = new PlayerStatsUI(this);
 
         // Setup camera to follow player
         this.cameras.main.setBounds(0, 0, WORLD.width, WORLD.height);
@@ -105,11 +177,22 @@ export default class MainScene extends Phaser.Scene {
         // Setup gold coin collection
         this.physics.add.overlap(this.player, this.goldCoins, this.collectGoldCoin, null, this);
 
+        // Health potion collection uses magnetic system (no overlap needed)
+
         // Setup environmental collision - player cannot walk through these objects
         this.physics.add.collider(this.player, this.trees);
         this.physics.add.collider(this.player, this.rocks);
-        this.physics.add.collider(this.player, this.bushes);
+        // Bushes are decorative only - no collision
         this.physics.add.collider(this.player, this.sheep);
+        this.physics.add.collider(this.player, this.goblinHuts);
+
+        // Setup enemy collision with environment - enemies cannot walk through huts/trees/rocks
+        this.physics.add.collider(this.enemies, this.goblinHuts);
+        this.physics.add.collider(this.enemies, this.trees);
+        this.physics.add.collider(this.enemies, this.rocks);
+
+        // Setup enemy-to-enemy collision - prevents enemies from stacking on same position
+        this.physics.add.collider(this.enemies, this.enemies);
 
         // Initialize wave
         this.gameState.enemiesThisWave = 0;
@@ -137,52 +220,156 @@ export default class MainScene extends Phaser.Scene {
         // Note: Collision between projectiles and huts is handled by CollisionSystem using raycast
         // No need for physics overlap
 
+        // Global console commands for testing (accessible via browser console)
+        window.enableRicochet = () => {
+            this.player.ricochetEnabled = true;
+            console.log('⚡ RICOCHET ENABLED! Arrows will bounce once to another enemy!');
+        };
+        window.disableRicochet = () => {
+            this.player.ricochetEnabled = false;
+            console.log('❌ Ricochet disabled');
+        };
+
         console.log('✅ MainScene: Setup complete');
+        console.log('💡 Console commands: enableRicochet(), disableRicochet()');
+
+        // Show starting ability selection on level 1 if not chosen yet
+        if (this.levelSystem.currentLevel === 1 && !this.gameState.hasChosenStartingAbility) {
+            this.showStartingAbilitySelection();
+        }
+    }
+
+    /**
+     * Show the starting ability selection UI
+     */
+    showStartingAbilitySelection() {
+        console.log('🎯 Showing starting ability selection...');
+
+        // Pause game while selecting
+        this.physics.pause();
+        this.gameState.playing = false;
+
+        this.startingAbilitySelectionUI.open((selectedAbility) => {
+            console.log(`✅ Player selected: ${selectedAbility.name}`);
+
+            // Add ability to owned abilities
+            this.gameState.ownedAbilities.push(selectedAbility.id);
+            this.gameState.hasChosenStartingAbility = true;
+
+            // Register ability with upgrade system (starts at level 1)
+            if (this.abilityUpgradeSystem) {
+                this.abilityUpgradeSystem.registerAbility(selectedAbility.id);
+            }
+
+            // Open slot assignment UI
+            this.slotAssignmentUI.open(selectedAbility.id, (slotKey) => {
+                console.log(`📍 Assigned ${selectedAbility.name} to slot ${slotKey}`);
+
+                // Assign to selected slot
+                this.gameState.abilitySlots[slotKey] = selectedAbility.id;
+
+                // Spawn initial guards for all huts (they were waiting for game to start)
+                this.goblinHuts.getChildren().forEach(hut => {
+                    if (hut.needsInitialSpawn) {
+                        hut.spawnInitialGuards();
+                        hut.needsInitialSpawn = false;
+                    }
+                });
+
+                // Resume game
+                this.physics.resume();
+                this.gameState.playing = true;
+                console.log('▶️ Game started! Initial guards spawned.');
+            });
+        });
     }
 
     createGoblinHuts() {
-        // Create 5 goblin huts spread out around the player start position (center of world) - Level 1
-        // Player starts at WORLD.width/2, WORLD.height/2
+        // Get level configuration
+        const levelConfig = this.levelSystem.getCurrentLevelConfig();
+        const hutCount = levelConfig.hutCount;
+        const spawnRateMultiplier = levelConfig.spawnRateMultiplier;
+        const fireRateMultiplier = levelConfig.fireRateMultiplier;
+
+        // Player starts at center
         const centerX = WORLD.width / 2;
         const centerY = WORLD.height / 2;
 
-        // Create 5 huts in a spread pattern around the player (farther apart)
-        // Hut 1: Upper-left from player
-        const hut1 = new GoblinHut(this, centerX - 400, centerY - 400);
+        // Predefined positions for up to 5 huts
+        const hutPositions = [
+            { x: centerX - 400, y: centerY - 400 },  // Upper-left
+            { x: centerX + 400, y: centerY - 400 },  // Upper-right
+            { x: centerX - 400, y: centerY + 400 },  // Lower-left
+            { x: centerX + 400, y: centerY + 400 },  // Lower-right
+            { x: centerX, y: centerY - 500 }         // Directly above
+        ];
 
-        // Hut 2: Upper-right from player
-        const hut2 = new GoblinHut(this, centerX + 400, centerY - 400);
+        // Create only the number of huts for this level
+        for (let i = 0; i < hutCount && i < hutPositions.length; i++) {
+            const pos = hutPositions[i];
+            const hut = new GoblinHut(
+                this,
+                pos.x,
+                pos.y,
+                spawnRateMultiplier,
+                fireRateMultiplier,
+                this.levelSystem.currentLevel  // Pass current level for dynamic spawn rates
+            );
+            this.goblinHuts.add(hut);
+        }
 
-        // Hut 3: Lower-left from player
-        const hut3 = new GoblinHut(this, centerX - 400, centerY + 400);
+        console.log(`🏠 Level ${levelConfig.level}: Created ${hutCount} goblin huts (spawn x${spawnRateMultiplier.toFixed(1)}, fire x${fireRateMultiplier.toFixed(1)})`);
 
-        // Hut 4: Lower-right from player
-        const hut4 = new GoblinHut(this, centerX + 400, centerY + 400);
+        // Spawn initial enemies on level 1 only
+        if (this.levelSystem.currentLevel === 1) {
+            this.spawnInitialEnemies();
+        }
+    }
 
-        // Hut 5: Directly above player (farther out)
-        const hut5 = new GoblinHut(this, centerX, centerY - 500);
+    spawnInitialEnemies() {
+        // Spawn 2 initial enemies near the first hut (but outside it)
+        const centerX = WORLD.width / 2;
+        const centerY = WORLD.height / 2;
 
-        this.goblinHuts.add(hut1);
-        this.goblinHuts.add(hut2);
-        this.goblinHuts.add(hut3);
-        this.goblinHuts.add(hut4);
-        this.goblinHuts.add(hut5);
+        // First hut is at upper-left: (centerX - 400, centerY - 400)
+        const hutX = centerX - 400;
+        const hutY = centerY - 400;
 
-        console.log('🏠 Created 5 goblin huts spread around player at', centerX, centerY);
+        // Spawn enemies at random positions around the hut (150-250 pixels away)
+        for (let i = 0; i < 2; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 150 + Math.random() * 100; // 150-250 pixels from hut
+
+            const enemyX = hutX + Math.cos(angle) * distance;
+            const enemyY = hutY + Math.sin(angle) * distance;
+
+            // Random enemy type
+            const enemyTypes = ['goblin', 'lancer', 'skull'];
+            const randomType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+
+            const enemy = new Enemy(this, enemyX, enemyY, randomType);
+            this.enemies.add(enemy);
+        }
+
+        console.log('🎯 Level 1: Spawned 2 initial enemies near first hut');
     }
 
     createRandomTrees() {
         const centerX = WORLD.width / 2;
         const centerY = WORLD.height / 2;
 
-        // Hut positions (MUST match createGoblinHuts exactly!)
-        const hutPositions = [
+        // Get dynamic hut positions based on level
+        const levelConfig = this.levelSystem.getCurrentLevelConfig();
+        const allHutPositions = [
             { x: centerX - 400, y: centerY - 400 }, // Hut 1: Upper-left
             { x: centerX + 400, y: centerY - 400 }, // Hut 2: Upper-right
             { x: centerX - 400, y: centerY + 400 }, // Hut 3: Lower-left
             { x: centerX + 400, y: centerY + 400 }, // Hut 4: Lower-right
             { x: centerX, y: centerY - 500 }        // Hut 5: Directly above
         ];
+
+        // Only use hut positions that exist in this level
+        const hutPositions = allHutPositions.slice(0, levelConfig.hutCount);
 
         // Collision radii
         const HUT_COLLISION_RADIUS = 300; // Don't spawn trees within 300px of huts (increased from 250px)
@@ -238,7 +425,8 @@ export default class MainScene extends Phaser.Scene {
 
             // Position is valid! Create tree
             const tree = new Tree(this, x, y);
-            this.trees.add(tree);
+            this.trees.add(tree); // staticGroup adds physics body automatically
+            tree.setupPhysics(); // Configure collision box after physics body is added
             treesCreated++;
         }
 
@@ -249,14 +437,18 @@ export default class MainScene extends Phaser.Scene {
         const centerX = WORLD.width / 2;
         const centerY = WORLD.height / 2;
 
-        // Hut positions (MUST match createGoblinHuts exactly!)
-        const hutPositions = [
+        // Get dynamic hut positions based on level
+        const levelConfig = this.levelSystem.getCurrentLevelConfig();
+        const allHutPositions = [
             { x: centerX - 400, y: centerY - 400 }, // Hut 1: Upper-left
             { x: centerX + 400, y: centerY - 400 }, // Hut 2: Upper-right
             { x: centerX - 400, y: centerY + 400 }, // Hut 3: Lower-left
             { x: centerX + 400, y: centerY + 400 }, // Hut 4: Lower-right
             { x: centerX, y: centerY - 500 }        // Hut 5: Directly above
         ];
+
+        // Only use hut positions that exist in this level
+        const hutPositions = allHutPositions.slice(0, levelConfig.hutCount);
 
         // Collision radii
         const HUT_COLLISION_RADIUS = 250; // Don't spawn bushes within 250px of huts (increased from 200px)
@@ -368,7 +560,8 @@ export default class MainScene extends Phaser.Scene {
 
             // Create rock with random type (1-4)
             const rock = new Rock(this, x, y);
-            this.rocks.add(rock);
+            this.rocks.add(rock); // staticGroup adds physics body automatically
+            rock.setupPhysics(); // Configure collision box after physics body is added
             rocksCreated++;
         }
 
@@ -444,30 +637,33 @@ export default class MainScene extends Phaser.Scene {
         this.player.body.setSize(35, 50); // Small hitbox around player body
         this.player.body.setOffset(78, 90); // Center on player torso (adjusted for 192x192)
 
-        // Set player depth based on Y position for proper layering with environment
-        this.player.setDepth(this.player.y);
+        // Set player depth based on FEET position for proper layering with environment
+        // Player sprite is 192x192 scaled to 0.75 = 144px, bottom = y + 72
+        this.player.setDepth(this.player.y + 72);
 
         // Player properties
         this.player.health = 100;
         this.player.maxHealth = 100;
         this.player.speed = 200;
         this.player.damageMultiplier = 1.0; // Damage multiplier (affected by berserker mode)
-        this.player.isInvulnerable = false;
-        this.player.invulnerabilityEndTime = 0;
         this.player.isShooting = false; // Track if playing shot animation
+        this.player.ricochetEnabled = false; // Ricochet ability - arrows bounce once to another enemy
+        this.player.isKnockedBack = false; // Track if player is being knocked back (disables movement control)
 
         // Player methods
         this.player.takeDamage = (amount) => {
-            // DEBUG
-            console.log('💔 takeDamage called! amount:', amount, 'isInvulnerable:', this.player.isInvulnerable);
-
-            if (this.player.isInvulnerable) {
-                console.log('✅ Damage blocked by invulnerability!');
-                return;
+            // Check if player is invulnerable (shield ability) - SAFEGUARD
+            const currentTime = this.time.now;
+            if (this.player.isInvulnerable && this.player.invulnerabilityEndTime > currentTime) {
+                console.log('🛡️ Damage blocked by shield! (takeDamage safeguard)');
+                return; // No damage taken
             }
 
             this.player.health -= amount;
             this.player.health = Math.max(0, this.player.health);
+
+            // Track statistics
+            this.levelSystem.addDamageTaken(amount);
 
             // Show damage number (red color for player damage)
             if (this.damageNumberSystem) {
@@ -486,15 +682,30 @@ export default class MainScene extends Phaser.Scene {
                 this.player.clearTint();
             });
 
-            // Invulnerability frames
-            this.player.isInvulnerable = true;
-            this.player.invulnerabilityEndTime = this.time.now + 1500;
-
             // Check if dead
             if (this.player.health <= 0) {
                 this.gameState.playing = false;
+                // Stop player movement immediately
+                this.player.setVelocity(0, 0);
                 this.showGameOver();
             }
+        };
+
+        // Player heal method
+        this.player.heal = (amount) => {
+            const oldHealth = this.player.health;
+            this.player.health = Math.min(this.player.maxHealth, this.player.health + amount);
+            const actualHeal = this.player.health - oldHealth;
+
+            console.log(`💚 Player healed for ${actualHeal} HP (${oldHealth} → ${this.player.health})`);
+
+            // Flash green to indicate healing
+            this.player.setTint(0x00ff00);
+            this.time.delayedCall(200, () => {
+                this.player.clearTint();
+            });
+
+            return actualHeal; // Return actual amount healed
         };
 
         // Create player animations
@@ -502,6 +713,9 @@ export default class MainScene extends Phaser.Scene {
 
         // Create death skull animation
         this.createDeathAnimations();
+
+        // Create health bar (in MainScene for correct depth)
+        this.createHealthBar();
 
         console.log('✅ Player created at:', this.player.x, this.player.y);
     }
@@ -577,6 +791,113 @@ export default class MainScene extends Phaser.Scene {
         }
     }
 
+    createHealthBar() {
+        const width = 60;
+        const height = 6;
+
+        // Container for health bar
+        this.healthBarContainer = this.add.container(0, 0);
+        this.healthBarContainer.setScrollFactor(0); // Fixed to screen
+        this.healthBarContainer.setDepth(1); // Low depth so modals appear above
+
+        // Outer shadow (drop shadow effect)
+        this.healthBarOuterShadow = this.add.rectangle(2, 2, width + 6, height + 6, 0x000000, 0.6)
+            .setOrigin(0.5, 0.5);
+
+        // Outer glow (epic glow effect)
+        this.healthBarGlow = this.add.rectangle(0, 0, width + 8, height + 8, 0xFF0000, 0.4)
+            .setOrigin(0.5, 0.5);
+
+        // Main outer border (thick black border)
+        this.healthBarOuterBorder = this.add.rectangle(0, 0, width + 4, height + 4, 0x1a1a1a, 1)
+            .setOrigin(0.5, 0.5);
+
+        // Secondary border (light border for contrast)
+        this.healthBarSecondaryBorder = this.add.rectangle(0, 0, width + 2, height + 2, 0xCCCCCC, 1)
+            .setOrigin(0.5, 0.5);
+
+        // Background (dark with slight transparency)
+        this.healthBarBg = this.add.rectangle(0, 0, width, height, 0x2a2a2a, 0.95)
+            .setOrigin(0.5, 0.5);
+
+        // Background gradient overlay (darker bottom)
+        this.healthBarBgGradient = this.add.rectangle(0, 1, width, height / 2, 0x000000, 0.3)
+            .setOrigin(0.5, 0.5);
+
+        // Health fill (main health bar)
+        this.healthBarFill = this.add.rectangle(-width/2, 0, width, height, 0x00ff00)
+            .setOrigin(0, 0.5);
+
+        // Health fill top highlight (bright shine on top)
+        this.healthBarTopHighlight = this.add.rectangle(-width/2, -height/2 + 1, width, 2, 0xFFFFFF, 0.5)
+            .setOrigin(0, 0.5);
+
+        // Inner glow on health bar (makes it pop)
+        this.healthBarInnerGlow = this.add.rectangle(-width/2, 0, width, height - 2, 0xFFFFFF, 0.2)
+            .setOrigin(0, 0.5);
+
+        // Add all elements to container in correct order
+        this.healthBarContainer.add([
+            this.healthBarOuterShadow,
+            this.healthBarGlow,
+            this.healthBarOuterBorder,
+            this.healthBarSecondaryBorder,
+            this.healthBarBg,
+            this.healthBarBgGradient,
+            this.healthBarFill,
+            this.healthBarInnerGlow,
+            this.healthBarTopHighlight
+        ]);
+
+        // Store original width for scaling
+        this.healthBarMaxWidth = width;
+
+        // Apply initial visibility state (in case it was set before creation)
+        if (this.healthBarVisible === false) {
+            this.healthBarContainer.setVisible(false);
+            console.log('🏥 Health bar created in MainScene with depth 1 (hidden)');
+        } else {
+            this.healthBarVisible = true;
+            console.log('🏥 Health bar created in MainScene with depth 1 (visible)');
+        }
+    }
+
+    hideHealthBar() {
+        this.healthBarVisible = false;
+        if (this.healthBarContainer) {
+            this.healthBarContainer.setVisible(false);
+            console.log('❌ Health bar hidden (MainScene)');
+        } else {
+            console.log('⚠️ Health bar will be hidden when created (MainScene)');
+        }
+    }
+
+    showHealthBar() {
+        this.healthBarVisible = true;
+        if (this.healthBarContainer) {
+            this.healthBarContainer.setVisible(true);
+            console.log('✅ Health bar shown (MainScene)');
+        } else {
+            console.log('⚠️ Health bar will be shown when created (MainScene)');
+        }
+    }
+
+    interpolateColor(color1, color2, factor) {
+        const r1 = (color1 >> 16) & 0xFF;
+        const g1 = (color1 >> 8) & 0xFF;
+        const b1 = color1 & 0xFF;
+
+        const r2 = (color2 >> 16) & 0xFF;
+        const g2 = (color2 >> 8) & 0xFF;
+        const b2 = color2 & 0xFF;
+
+        const r = Math.round(r1 + (r2 - r1) * factor);
+        const g = Math.round(g1 + (g2 - g1) * factor);
+        const b = Math.round(b1 + (b2 - b1) * factor);
+
+        return (r << 16) | (g << 8) | b;
+    }
+
     setupInput() {
         // Keyboard controls
         this.cursors = this.input.keyboard.createCursorKeys();
@@ -585,16 +906,14 @@ export default class MainScene extends Phaser.Scene {
             A: Phaser.Input.Keyboard.KeyCodes.A,
             S: Phaser.Input.Keyboard.KeyCodes.S,
             D: Phaser.Input.Keyboard.KeyCodes.D,
-            Q: Phaser.Input.Keyboard.KeyCodes.Q, // Dash
-            E: Phaser.Input.Keyboard.KeyCodes.E, // Burst
-            R: Phaser.Input.Keyboard.KeyCodes.R, // Shield
-            X: Phaser.Input.Keyboard.KeyCodes.X, // Chain Lightning
-            Z: Phaser.Input.Keyboard.KeyCodes.Z, // Berserker Mode
-            F: Phaser.Input.Keyboard.KeyCodes.F, // Summon Mini Archers
-            P: Phaser.Input.Keyboard.KeyCodes.P, // Plant bamboo
+            Q: Phaser.Input.Keyboard.KeyCodes.Q, // Ability Slot 1
+            E: Phaser.Input.Keyboard.KeyCodes.E, // Ability Slot 2
+            R: Phaser.Input.Keyboard.KeyCodes.R, // Ability Slot 3
+            T: Phaser.Input.Keyboard.KeyCodes.T, // Ability Slot 4
+            F: Phaser.Input.Keyboard.KeyCodes.F, // Ability Slot 5
+            P: Phaser.Input.Keyboard.KeyCodes.P, // DEBUG: Add gold
+            O: Phaser.Input.Keyboard.KeyCodes.O, // DEBUG: Spawn enemies
             H: Phaser.Input.Keyboard.KeyCodes.H, // Axe mode
-            V: Phaser.Input.Keyboard.KeyCodes.V, // Sell wood
-            T: Phaser.Input.Keyboard.KeyCodes.T, // Shop
             B: Phaser.Input.Keyboard.KeyCodes.B, // Toggle hitbox debug
             SPACE: Phaser.Input.Keyboard.KeyCodes.SPACE // DEBUG: Manual fire arrow
         });
@@ -607,6 +926,14 @@ export default class MainScene extends Phaser.Scene {
         // Get skull position
         const skullX = skull.x;
         const skullY = skull.y;
+
+        // Get gold value from skull (already has combo bonus applied!) 🔥
+        const goldAmount = skull.getData('goldValue') || Phaser.Math.Between(
+            skull.getData('goldMin') || 1,
+            skull.getData('goldMax') || 1
+        );
+
+        console.log(`💀 Skull collected! Gold: ${goldAmount} (with combo bonus already applied)`);
 
         // Mark as not collectible to prevent double collection
         skull.setData('collectible', false);
@@ -622,6 +949,9 @@ export default class MainScene extends Phaser.Scene {
         goldCoin.body.setSize(20, 20); // Very small hitbox - player must be on top of coin
         goldCoin.body.setOffset(54, 54); // Center the tiny hitbox (128px sprite, so (128-20)/2 = 54)
 
+        // Store gold value in coin data
+        goldCoin.setData('goldValue', goldAmount);
+
         // Play spawn animation
         goldCoin.play('gold-spawn-anim');
 
@@ -630,6 +960,13 @@ export default class MainScene extends Phaser.Scene {
             goldCoin.setTexture('gold-idle');
             goldCoin.setData('canCollect', true); // Mark as ready for magnetic collection
         });
+
+        // 💊 8% chance to drop health potion when collecting skull
+        if (Math.random() < 0.08) {
+            console.log('💊 Health potion spawned from skull at', skullX, skullY);
+            const potion = new HealthPotion(this, skullX, skullY);
+            this.healthPotions.add(potion);
+        }
 
         // Destroy skull after disappear animation completes
         skull.once('animationcomplete', () => {
@@ -641,20 +978,88 @@ export default class MainScene extends Phaser.Scene {
         // Only collect if spawn animation is complete
         if (!coin.getData('canCollect')) return;
 
+        // Get gold value from coin data (set when skull was collected)
+        let goldValue = coin.getData('goldValue') || 1; // Default to 1 if not set
+
         // Stop any pulsing animation
         if (coin.getData('isPulsing')) {
             this.tweens.killTweensOf(coin);
         }
 
+        // Apply level 1 gold bonus (20% extra)
+        const isLevel1 = this.levelSystem.currentLevel === 1;
+        if (isLevel1) {
+            goldValue = Math.floor(goldValue * 1.2);
+        }
+
+        // 🍀 LUCK SYSTEM: Check for double gold proc!
+        let finalGoldValue = goldValue;
+        let luckProc = false;
+
+        if (this.player.luckChance && this.player.luckChance > 0) {
+            const roll = Math.random();
+            if (roll < this.player.luckChance) {
+                // LUCK PROC! Double the gold! 🍀💰
+                finalGoldValue = goldValue * 2;
+                luckProc = true;
+
+                // Epic visual feedback for luck proc!
+                const luckText = this.add.text(
+                    this.player.x,
+                    this.player.y - 80,
+                    '🍀 LUCKY! 🍀',
+                    {
+                        fontSize: '28px',
+                        fontFamily: 'Arial',
+                        color: '#00FF00',
+                        stroke: '#000000',
+                        strokeThickness: 6,
+                        fontStyle: 'bold'
+                    }
+                );
+                luckText.setOrigin(0.5);
+                luckText.setScrollFactor(1);
+                luckText.setDepth(3000);
+
+                // Animate luck text
+                this.tweens.add({
+                    targets: luckText,
+                    y: luckText.y - 40,
+                    alpha: 0,
+                    duration: 1500,
+                    ease: 'Cubic.easeOut',
+                    onComplete: () => luckText.destroy()
+                });
+
+                // Small screen shake for extra juice!
+                this.cameras.main.shake(150, 0.002);
+
+                console.log(`🍀 LUCK PROC! Gold doubled: ${goldValue} → ${finalGoldValue} (${(this.player.luckChance * 100).toFixed(0)}% chance)`);
+            }
+        }
+
         // TRIGGER ALL THE DOPAMINIC EFFECTS! 🔥💰🎉
         // Pass the player object so text appears above player
-        this.goldCollectionEffects.triggerCollectionEffects(this.player, 1);
+        this.goldCollectionEffects.triggerCollectionEffects(this.player, finalGoldValue);
 
-        // Give 1 gold to player
-        this.gameState.resources.gold = (this.gameState.resources.gold || 0) + 1;
+        // Give gold to player (variable amount based on enemy type + combo bonus!)
+        this.gameState.resources.gold = (this.gameState.resources.gold || 0) + finalGoldValue;
+
+        // Track statistics
+        this.levelSystem.addGold(finalGoldValue);
+
+        const bonusText = isLevel1 ? ' (+20% LV1 BONUS!)' : '';
+        console.log(`💰 Gold collected: +${finalGoldValue} (Total: ${this.gameState.resources.gold})${bonusText}`);
 
         // Destroy coin
         coin.destroy();
+    }
+
+    collectHealthPotion(player, potion) {
+        // Delegate to the HealthPotion's own collect method
+        if (potion.isCollectible) {
+            potion.collect(player);
+        }
     }
 
     updateGoldMagnet() {
@@ -662,19 +1067,61 @@ export default class MainScene extends Phaser.Scene {
         this.goldCollectionEffects.updateMagneticPull(this.goldCoins, this.player);
     }
 
+    updatePotionMagnet() {
+        // Magnetic pull for health potions - same system as gold
+        if (!this.player || !this.healthPotions) return;
+
+        const magnetRange = 150; // Same range as gold
+        const magnetStrength = 300; // Pull speed
+
+        this.healthPotions.getChildren().forEach(potion => {
+            // Only attract potions that have finished their spawn animation
+            if (!potion.canCollect) return;
+
+            const distance = Phaser.Math.Distance.Between(
+                this.player.x, this.player.y,
+                potion.x, potion.y
+            );
+
+            // If close enough, collect immediately
+            if (distance < 30) {
+                potion.collect(this.player);
+                return;
+            }
+
+            // If within magnetic range, pull towards player
+            if (distance < magnetRange) {
+                const angle = Phaser.Math.Angle.Between(
+                    potion.x, potion.y,
+                    this.player.x, this.player.y
+                );
+
+                const velocityX = Math.cos(angle) * magnetStrength;
+                const velocityY = Math.sin(angle) * magnetStrength;
+
+                potion.setVelocity(velocityX, velocityY);
+            } else {
+                // Stop movement if out of range
+                potion.setVelocity(0, 0);
+            }
+        });
+    }
+
     update(time, delta) {
         if (!this.gameState.playing) return;
 
-        // Update invulnerability
-        if (this.player.isInvulnerable && time > this.player.invulnerabilityEndTime) {
-            this.player.isInvulnerable = false;
-        }
-
         // Update player depth for dynamic layering with environment (Y-based sorting)
-        this.player.setDepth(this.player.y);
+        // Use player's FEET position (bottom of sprite) for depth sorting
+        // Player sprite is 192x192 scaled to 0.75 = 144px
+        // Bottom position = center Y + half height = y + 72
+        const playerBottomY = this.player.y + 72;
+        this.player.setDepth(playerBottomY);
 
         // Handle ability input
         this.handleAbilityInput(time);
+
+        // Handle debug input
+        this.handleDebugInput();
 
         // Update player movement
         this.updatePlayerMovement();
@@ -682,8 +1129,10 @@ export default class MainScene extends Phaser.Scene {
         // Update modular systems
         this.enemySpawnSystem.update(time);
         this.autoFireSystem.update(time);
-        this.abilitySystem.update(time);
+        this.abilitySystem.update(time, delta);
         this.collisionSystem.update(); // RAYCAST collision detection
+        this.upgradeSystem.update(time); // Handle regeneration and other upgrade effects
+        this.comboSystem.update(time); // 🔥 Check for streak timeout
 
         // Update mini archers (summoned allies)
         if (this.miniArchers && this.miniArchers.length > 0) {
@@ -702,52 +1151,176 @@ export default class MainScene extends Phaser.Scene {
         // Update magnetic attraction for gold coins
         this.updateGoldMagnet();
 
+        // Update magnetic attraction for health potions
+        this.updatePotionMagnet();
+
         // Update UI
         this.abilityBarUI.update();
         if (this.goldUI) {
             this.goldUI.update();
         }
+        if (this.playerStatsUI) {
+            this.playerStatsUI.update();
+        }
+
+        // PERFORMANCE: Periodic cleanup (every 2 seconds)
+        if (!this.lastCleanupTime) this.lastCleanupTime = 0;
+        if (time - this.lastCleanupTime > 2000) {
+            this.performanceCleanup();
+            this.lastCleanupTime = time;
+        }
 
         // Check for victory condition
         this.checkVictoryCondition();
+
+        // Update health bar position and appearance (only if visible)
+        if (this.healthBarVisible && this.player && this.healthBarContainer) {
+            const healthPercent = this.player.health / this.player.maxHealth;
+
+            // Convert world coordinates to screen coordinates
+            const camera = this.cameras.main;
+            const screenX = this.player.x - camera.scrollX;
+            const screenY = this.player.y - camera.scrollY - 42; // Higher above player's head
+
+            // Position health bar above player's head in screen space
+            this.healthBarContainer.x = screenX;
+            this.healthBarContainer.y = screenY;
+
+            // Smooth width transition with tween-like effect
+            const targetWidth = this.healthBarMaxWidth * healthPercent;
+            const currentWidth = this.healthBarFill.displayWidth;
+            const lerpSpeed = 0.2;
+            const newWidth = currentWidth + (targetWidth - currentWidth) * lerpSpeed;
+
+            this.healthBarFill.displayWidth = newWidth;
+            this.healthBarTopHighlight.displayWidth = newWidth;
+            this.healthBarInnerGlow.displayWidth = newWidth;
+
+            // Color gradient based on health percentage (vibrant gaming colors)
+            let color, glowColor;
+            if (healthPercent > 0.6) {
+                // Bright green to lime green (100% to 60%)
+                const t = (healthPercent - 0.6) / 0.4;
+                color = this.interpolateColor(0x7FFF00, 0x00FF00, t);
+                glowColor = 0x00FF00;
+            } else if (healthPercent > 0.35) {
+                // Yellow to orange (60% to 35%)
+                const t = (healthPercent - 0.35) / 0.25;
+                color = this.interpolateColor(0xFF8C00, 0xFFFF00, t);
+                glowColor = 0xFFFF00;
+            } else if (healthPercent > 0.15) {
+                // Orange to red-orange (35% to 15%)
+                const t = (healthPercent - 0.15) / 0.2;
+                color = this.interpolateColor(0xFF4500, 0xFF8C00, t);
+                glowColor = 0xFF4500;
+            } else {
+                // Red to dark red (15% to 0%)
+                const t = healthPercent / 0.15;
+                color = this.interpolateColor(0x8B0000, 0xFF0000, t);
+                glowColor = 0xFF0000;
+            }
+
+            this.healthBarFill.setFillStyle(color, 1);
+            this.healthBarGlow.setFillStyle(glowColor);
+
+            // Dynamic pulsing effects
+            if (healthPercent < 0.25 && healthPercent > 0) {
+                // Intense pulse when critically low
+                const pulse = Math.sin(this.time.now / 120) * 0.2 + 0.8;
+                this.healthBarGlow.setAlpha(0.3 + (1 - pulse) * 0.4);
+                this.healthBarGlow.setScale(1 + (1 - pulse) * 0.15);
+            } else if (healthPercent < 0.5) {
+                // Moderate pulse when low
+                const pulse = Math.sin(this.time.now / 200) * 0.1 + 0.9;
+                this.healthBarGlow.setAlpha(0.25 + (1 - pulse) * 0.15);
+                this.healthBarGlow.setScale(1);
+            } else {
+                // Normal state
+                this.healthBarGlow.setAlpha(0.2);
+                this.healthBarGlow.setScale(1);
+            }
+        }
     }
 
     handleAbilityInput(time) {
-        // Dash (Q)
+        // Q Slot
         if (Phaser.Input.Keyboard.JustDown(this.keys.Q)) {
-            this.abilitySystem.dash(time);
+            this.activateAbilitySlot('Q', time);
+        }
+        if (Phaser.Input.Keyboard.JustUp(this.keys.Q)) {
+            this.releaseAbilitySlot('Q', time);
         }
 
-        // Burst (E) - Hold to charge
+        // E Slot
         if (Phaser.Input.Keyboard.JustDown(this.keys.E)) {
-            this.abilitySystem.startChargingBurst(time);
+            this.activateAbilitySlot('E', time);
         }
-        // Release burst when E is released
         if (Phaser.Input.Keyboard.JustUp(this.keys.E)) {
+            this.releaseAbilitySlot('E', time);
+        }
+
+        // R Slot
+        if (Phaser.Input.Keyboard.JustDown(this.keys.R)) {
+            this.activateAbilitySlot('R', time);
+        }
+        if (Phaser.Input.Keyboard.JustUp(this.keys.R)) {
+            this.releaseAbilitySlot('R', time);
+        }
+
+        // T Slot
+        if (Phaser.Input.Keyboard.JustDown(this.keys.T)) {
+            this.activateAbilitySlot('T', time);
+        }
+        if (Phaser.Input.Keyboard.JustUp(this.keys.T)) {
+            this.releaseAbilitySlot('T', time);
+        }
+
+        // F Slot
+        if (Phaser.Input.Keyboard.JustDown(this.keys.F)) {
+            this.activateAbilitySlot('F', time);
+        }
+        if (Phaser.Input.Keyboard.JustUp(this.keys.F)) {
+            this.releaseAbilitySlot('F', time);
+        }
+    }
+
+    /**
+     * Activate ability in a slot
+     */
+    activateAbilitySlot(slotKey, time) {
+        const abilityId = this.gameState.abilitySlots[slotKey];
+
+        if (!abilityId) {
+            console.log(`🔒 Slot ${slotKey} is empty!`);
+            return;
+        }
+
+        // Call the ability using its ID
+        if (this.abilitySystem[abilityId]) {
+            this.abilitySystem[abilityId](time);
+        } else if (abilityId === 'burst') {
+            // Special handling for burst (hold to charge)
+            this.abilitySystem.startChargingBurst(time);
+        } else {
+            console.warn(`⚠️ Ability ${abilityId} not found in AbilitySystem`);
+        }
+    }
+
+    /**
+     * Release ability in a slot (for hold abilities like burst)
+     */
+    releaseAbilitySlot(slotKey, time) {
+        const abilityId = this.gameState.abilitySlots[slotKey];
+
+        if (!abilityId) return;
+
+        // Only burst needs release handling
+        if (abilityId === 'burst') {
             this.abilitySystem.releaseBurst(time);
         }
+    }
 
-        // Shield (R)
-        if (Phaser.Input.Keyboard.JustDown(this.keys.R)) {
-            this.abilitySystem.shield(time);
-        }
-
-        // Chain Lightning (X)
-        if (Phaser.Input.Keyboard.JustDown(this.keys.X)) {
-            console.log('⚡ X key pressed - attempting chain lightning');
-            this.abilitySystem.chainLightning(time);
-        }
-
-        // Berserker Mode (Z)
-        if (Phaser.Input.Keyboard.JustDown(this.keys.Z)) {
-            this.abilitySystem.berserker(time);
-        }
-
-        // Summon Mini Archers (F)
-        if (Phaser.Input.Keyboard.JustDown(this.keys.F)) {
-            this.abilitySystem.summon(time);
-        }
-
+    handleDebugInput() {
         // Toggle hitbox debug (B)
         if (Phaser.Input.Keyboard.JustDown(this.keys.B)) {
             // Toggle Phaser's built-in debug rendering
@@ -767,6 +1340,46 @@ export default class MainScene extends Phaser.Scene {
             console.log('🎯 Hitbox debug:', !currentDebug ? 'ON' : 'OFF');
         }
 
+        // DEBUG: Add gold (P)
+        if (Phaser.Input.Keyboard.JustDown(this.keys.P)) {
+            const goldAmount = 100;
+            this.gameState.resources.gold = (this.gameState.resources.gold || 0) + goldAmount;
+
+            // Trigger gold UI vibration effect
+            if (this.goldUI) {
+                this.goldUI.vibrate();
+            }
+
+            console.log(`💰 DEBUG: Added ${goldAmount} gold (Total: ${this.gameState.resources.gold})`);
+        }
+
+        // DEBUG: Spawn skulls only (O) - potions come from collecting skulls
+        if (Phaser.Input.Keyboard.JustDown(this.keys.O)) {
+            const spawnCount = 10; // Spawn 10 skulls
+            for (let i = 0; i < spawnCount; i++) {
+                // Spawn in a circle around the player
+                const angle = (Math.PI * 2 / spawnCount) * i;
+                const distance = 100 + Math.random() * 50; // 100-150 pixels away
+                const x = this.player.x + Math.cos(angle) * distance;
+                const y = this.player.y + Math.sin(angle) * distance;
+
+                // Create collectible skull with gold
+                const skull = this.physics.add.sprite(x, y, 'death-skull', 0);
+                this.skulls.add(skull);
+                skull.setScale(1.0);
+                skull.setDepth(0);
+                skull.body.setSize(80, 80);
+                skull.body.setOffset(24, 24);
+                skull.setData('goldValue', 10);
+                skull.play('death-skull-bounce');
+                skull.on('animationcomplete', () => {
+                    skull.setFrame(6);
+                    skull.setData('collectible', true);
+                });
+            }
+            console.log(`💀 DEBUG: Spawned ${spawnCount} skulls around player`);
+        }
+
         // DEBUG: Manual fire arrow (SPACE)
         if (Phaser.Input.Keyboard.JustDown(this.keys.SPACE)) {
             // Fire arrow to the right
@@ -777,6 +1390,17 @@ export default class MainScene extends Phaser.Scene {
     }
 
     updatePlayerMovement() {
+        // Don't control movement if game is over (player is dead)
+        if (!this.gameState.playing) {
+            this.player.setVelocity(0, 0); // Ensure player stays stopped
+            return;
+        }
+
+        // Don't control movement if player is being knocked back
+        if (this.player.isKnockedBack) {
+            return; // Skip movement control, let knockback velocity play out
+        }
+
         const speed = this.player.speed;
         let velocityX = 0;
         let velocityY = 0;
@@ -847,6 +1471,59 @@ export default class MainScene extends Phaser.Scene {
         return 'south'; // fallback
     }
 
+    /**
+     * PERFORMANCE: Cleanup resources to maintain FPS
+     * Called every 2 seconds from update()
+     */
+    performanceCleanup() {
+        let cleanupCount = 0;
+
+        // 1. Clean up distant enemies (beyond cleanup distance)
+        const enemies = this.enemies.getChildren();
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            const enemy = enemies[i];
+            if (!enemy || !enemy.active) continue;
+
+            const dist = Phaser.Math.Distance.Between(
+                this.player.x, this.player.y,
+                enemy.x, enemy.y
+            );
+
+            // Remove enemies very far from player (but not guards near huts)
+            if (dist > this.enemyCleanupDistance && !enemy.isGuard) {
+                enemy.destroy();
+                cleanupCount++;
+            }
+        }
+
+        // 2. Clean up inactive/stuck projectiles
+        const projectiles = this.projectiles.getChildren();
+        for (let i = projectiles.length - 1; i >= 0; i--) {
+            const proj = projectiles[i];
+            if (!proj || !proj.active) {
+                // Already inactive, remove from group
+                this.projectiles.remove(proj, true, true);
+                cleanupCount++;
+            }
+        }
+
+        // 3. Log cleanup statistics (only if something was cleaned)
+        if (cleanupCount > 0) {
+            const totalEnemies = this.enemies.getChildren().filter(e => e.active).length;
+            const totalProjectiles = this.projectiles.getChildren().filter(p => p.active).length;
+            console.log(`🧹 Performance cleanup: Removed ${cleanupCount} objects | Enemies: ${totalEnemies}/${this.MAX_ENEMIES} | Projectiles: ${totalProjectiles}`);
+        }
+    }
+
+    /**
+     * Check if enemy spawn is allowed (respects MAX_ENEMIES limit)
+     */
+    canSpawnEnemy() {
+        const aliveEnemies = this.enemies.getChildren()
+            .filter(e => e.active && !e.isDying && e.health > 0);
+        return aliveEnemies.length < this.MAX_ENEMIES;
+    }
+
     checkVictoryCondition() {
         // Prevent multiple checks
         if (this.victoryShown || this.gameOverShown) return;
@@ -861,8 +1538,112 @@ export default class MainScene extends Phaser.Scene {
 
         // Victory if all enemies AND huts are destroyed
         if (aliveEnemies.length === 0 && aliveHuts.length === 0) {
-            this.showVictory();
+            this.levelComplete();
         }
+    }
+
+    levelComplete() {
+        // Prevent multiple calls
+        if (this.victoryShown) return;
+        this.victoryShown = true;
+
+        // End level tracking
+        this.levelSystem.endLevel();
+
+        // 🎯 LEVEL COMPLETION GOLD BONUS!
+        const levelBonuses = {
+            1: 50,   // Level 1: +50 gold
+            2: 75,   // Level 2: +75 gold
+            3: 100,  // Level 3: +100 gold
+            4: 150,  // Level 4: +150 gold
+            5: 250   // Level 5: +250 gold (VICTORY!)
+        };
+
+        const currentLevel = this.levelSystem.currentLevel;
+        const bonus = levelBonuses[currentLevel] || 0;
+
+        if (bonus > 0) {
+            // Give bonus gold
+            this.gameState.resources.gold = (this.gameState.resources.gold || 0) + bonus;
+
+            // Track statistics
+            this.levelSystem.addGold(bonus);
+
+            // Show epic gold collection effect for level completion!
+            if (this.goldCollectionEffects) {
+                this.goldCollectionEffects.triggerCollectionEffects(this.player, bonus);
+            }
+
+            console.log(`🎉 LEVEL ${currentLevel} COMPLETE! Bonus: +${bonus} gold (Total: ${this.gameState.resources.gold})`);
+        }
+
+        console.log('✅ Level Complete!');
+
+        // Show elegant side panel with stats (no blocking!)
+        this.levelCompletePanel.show();
+
+        // Game continues! Player can still move and play
+    }
+
+    startNextLevel() {
+        // Reset victory flag to allow next level completion check
+        this.victoryShown = false;
+
+        console.log(`🎮 Starting Level ${this.levelSystem.currentLevel}...`);
+
+        // COPY player statistics BEFORE level transition
+        const playerStats = {
+            health: this.player.health,
+            maxHealth: this.player.maxHealth,
+            speed: this.player.speed,
+            damageMultiplier: this.player.damageMultiplier,
+            ricochetEnabled: this.player.ricochetEnabled
+        };
+
+        console.log('📊 Preserving player stats:', playerStats);
+
+        // Start tracking new level statistics
+        this.levelSystem.startLevel();
+
+        // Reset player position to center of world
+        if (this.player) {
+            this.player.setPosition(WORLD.width / 2, WORLD.height / 2);
+            this.player.setVelocity(0, 0); // Stop any movement
+
+            // RESTORE player statistics after repositioning
+            this.player.health = playerStats.health;
+            this.player.maxHealth = playerStats.maxHealth;
+            this.player.speed = playerStats.speed;
+            this.player.damageMultiplier = playerStats.damageMultiplier;
+            this.player.ricochetEnabled = playerStats.ricochetEnabled;
+
+            console.log('🏠 Player reset to center:', this.player.x, this.player.y);
+            console.log('✅ Stats restored - HP:', this.player.health, 'MaxHP:', this.player.maxHealth, 'Speed:', this.player.speed);
+        }
+
+        // Clear all current enemies
+        this.enemies.clear(true, true);
+
+        // Clear all current goblin huts
+        this.goblinHuts.clear(true, true);
+
+        // Clear environmental objects
+        this.trees.clear(true, true);
+        this.bushes.clear(true, true);
+        this.rocks.clear(true, true);
+
+        // Recreate level with new configuration
+        this.createGoblinHuts();
+        this.createRandomTrees();
+        this.createRandomBushes();
+        this.createRandomRocks();
+
+        // Reinitialize pathfinding with new obstacles
+        if (this.pathfindingSystem) {
+            this.pathfindingSystem.markObstacles();
+        }
+
+        console.log(`✅ Level ${this.levelSystem.currentLevel} loaded!`);
     }
 
     showVictory() {
@@ -883,7 +1664,7 @@ export default class MainScene extends Phaser.Scene {
             0.7
         );
         overlay.setScrollFactor(0);
-        overlay.setDepth(10000);
+        overlay.setDepth(20000);
 
         // YOU WIN text
         const victoryText = this.add.text(
@@ -900,7 +1681,7 @@ export default class MainScene extends Phaser.Scene {
         );
         victoryText.setOrigin(0.5);
         victoryText.setScrollFactor(0);
-        victoryText.setDepth(10001);
+        victoryText.setDepth(20001);
 
         // Calculate survival time
         const survivalTime = Math.floor(this.time.now / 1000);
@@ -927,7 +1708,7 @@ Time: ${minutes}m ${seconds}s`,
         );
         statsText.setOrigin(0.5);
         statsText.setScrollFactor(0);
-        statsText.setDepth(10001);
+        statsText.setDepth(20001);
 
         // Restart button background
         const buttonBg = this.add.rectangle(
@@ -938,7 +1719,7 @@ Time: ${minutes}m ${seconds}s`,
             0x00aa00
         );
         buttonBg.setScrollFactor(0);
-        buttonBg.setDepth(10002);
+        buttonBg.setDepth(20002);
         buttonBg.setInteractive({ useHandCursor: true });
 
         // Restart button text
@@ -955,7 +1736,7 @@ Time: ${minutes}m ${seconds}s`,
         );
         buttonText.setOrigin(0.5);
         buttonText.setScrollFactor(0);
-        buttonText.setDepth(10003);
+        buttonText.setDepth(20003);
 
         // Button hover effect
         buttonBg.on('pointerover', () => {
@@ -968,6 +1749,8 @@ Time: ${minutes}m ${seconds}s`,
 
         // Button click - restart game
         buttonBg.on('pointerdown', () => {
+            // Show health bar before restarting
+            this.showHealthBar();
             this.scene.restart();
         });
     }
@@ -979,6 +1762,9 @@ Time: ${minutes}m ${seconds}s`,
 
         console.log('💀 Game Over!');
 
+        // Hide health bar so it doesn't appear above the restart button
+        this.hideHealthBar();
+
         // Create semi-transparent black overlay
         const overlay = this.add.rectangle(
             this.cameras.main.width / 2,
@@ -989,7 +1775,7 @@ Time: ${minutes}m ${seconds}s`,
             0.7
         );
         overlay.setScrollFactor(0); // Fixed to camera
-        overlay.setDepth(10000); // MUY por encima de todo
+        overlay.setDepth(20000); // MUY por encima de todo, incluyendo la barra de vida (10000)
 
         // Game Over text
         const gameOverText = this.add.text(
@@ -1006,7 +1792,7 @@ Time: ${minutes}m ${seconds}s`,
         );
         gameOverText.setOrigin(0.5);
         gameOverText.setScrollFactor(0);
-        gameOverText.setDepth(10001);
+        gameOverText.setDepth(20001);
 
         // Score text
         const scoreText = this.add.text(
@@ -1022,7 +1808,7 @@ Time: ${minutes}m ${seconds}s`,
         );
         scoreText.setOrigin(0.5);
         scoreText.setScrollFactor(0);
-        scoreText.setDepth(10001);
+        scoreText.setDepth(20001);
 
         // Restart button background
         const buttonBg = this.add.rectangle(
@@ -1033,7 +1819,7 @@ Time: ${minutes}m ${seconds}s`,
             0x00aa00
         );
         buttonBg.setScrollFactor(0);
-        buttonBg.setDepth(10002);
+        buttonBg.setDepth(20002); // Por encima de todo
         buttonBg.setInteractive({ useHandCursor: true });
 
         // Restart button text
@@ -1050,7 +1836,7 @@ Time: ${minutes}m ${seconds}s`,
         );
         buttonText.setOrigin(0.5);
         buttonText.setScrollFactor(0);
-        buttonText.setDepth(10003);
+        buttonText.setDepth(20003); // Por encima de todo
 
         // Button hover effect
         buttonBg.on('pointerover', () => {
@@ -1063,6 +1849,10 @@ Time: ${minutes}m ${seconds}s`,
 
         // Button click - restart game
         buttonBg.on('pointerdown', () => {
+            // Show health bar before restarting
+            this.showHealthBar();
+            // Reset to level 1 and restart
+            this.levelSystem.resetToLevel1();
             this.scene.restart();
         });
     }

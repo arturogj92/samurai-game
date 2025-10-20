@@ -3,7 +3,9 @@ import Phaser from 'phaser';
 export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     constructor(scene, x, y, type = 'goblin') {
         // Get the initial sprite key based on enemy type
-        const initialSpriteKey = type === 'lancer' ? 'lancer-idle' : 'goblin-torch';
+        let initialSpriteKey = 'goblin-torch';
+        if (type === 'lancer') initialSpriteKey = 'lancer-idle';
+        if (type === 'skull') initialSpriteKey = 'skull-idle';
         super(scene, x, y, initialSpriteKey, 0);
 
         scene.add.existing(this);
@@ -76,7 +78,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
         // Enhanced stats for hunters
         this.speed *= 1.5; // 50% faster
         this.damage *= 1.5; // 50% more damage
-        this.health *= 1.3; // 30% more health
+        this.health *= 1.3333; // 33.33% more health (1/3 more)
 
         // Visual indicator - red tint to show this is a special enemy
         this.setTint(0xff6666);
@@ -84,29 +86,113 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
         console.log(`🎯 HUNTER spawned! Range: ${this.activationRange}px, Speed: ${this.speed}, Damage: ${this.damage}`);
     }
 
+    /**
+     * Make this enemy aggressive and force it to chase the player
+     * Used when hut is attacked or nearby enemy is attacked
+     */
+    setAggressive(playerX, playerY) {
+        // If this is a guard, activate it immediately
+        if (this.isGuard && !this.isActivated) {
+            this.isActivated = true;
+            console.log(`💢 ${this.enemyType} guard activated by aggression system!`);
+        }
+
+        // Force immediate path update to chase player
+        if (this.scene && this.scene.time) {
+            this.lastPathUpdate = 0; // Force path recalculation
+        }
+    }
+
+    /**
+     * Alert nearby enemies when this enemy is attacked
+     * @param {number} alertRadius - Distance to alert enemies (default 120)
+     */
+    alertNearbyEnemies(alertRadius = 120) {
+        if (!this.scene || !this.scene.enemies || !this.scene.player) return;
+
+        let alertedCount = 0;
+        this.scene.enemies.getChildren().forEach(enemy => {
+            // Don't alert self
+            if (enemy === this) return;
+
+            // Only alert living, inactive guards
+            if (enemy.isDying) return;
+
+            // Check distance
+            const distance = Phaser.Math.Distance.Between(this.x, this.y, enemy.x, enemy.y);
+            if (distance <= alertRadius) {
+                // Alert this nearby enemy
+                if (enemy.setAggressive) {
+                    enemy.setAggressive(this.scene.player.x, this.scene.player.y);
+                    alertedCount++;
+                }
+            }
+        });
+
+        if (alertedCount > 0) {
+            console.log(`⚠️ ${alertedCount} nearby enemies alerted!`);
+        }
+    }
+
     configureStats() {
+        // Get current level for HP scaling (default to 5 if not available)
+        const currentLevel = this.scene?.levelSystem?.currentLevel || 5;
+
+        // HP scaling multipliers based on level (early game friendlier)
+        let hpMultiplier = 1.0; // Level 5 = full HP (challenge)
+        if (currentLevel <= 2) {
+            hpMultiplier = 0.7; // Level 1-2: -30% HP (more accessible)
+        } else if (currentLevel <= 4) {
+            hpMultiplier = 0.85; // Level 3-4: -15% HP (balanced)
+        }
+
         switch (this.enemyType) {
+            case 'skull':
+                this.health = Math.floor(132 * hpMultiplier); // Scales with level
+                this.maxHealth = this.health;
+                this.speed = 99; // Moderate speed
+                this.damage = 33; // Devastating damage
+                this.attackCooldown = 1364; // Faster attack rate
+                this.goldMin = 12; // 💰 High gold reward (x3)
+                this.goldMax = 20; // 💰 (was 4-7, now 12-20)
+                break;
             case 'lancer':
-                this.health = 80;
-                this.maxHealth = 80;
-                this.speed = 100; // Faster than goblin
-                this.damage = 15;
-                this.attackCooldown = 1200; // ms
+                this.health = Math.floor(88 * hpMultiplier); // Scales with level
+                this.maxHealth = this.health;
+                this.speed = 110; // Faster than goblin
+                this.damage = 17;
+                this.attackCooldown = 1091; // ms
+                this.goldMin = 6; // 💰 Medium gold reward (x3)
+                this.goldMax = 12; // 💰 (was 2-4, now 6-12)
                 break;
             case 'goblin':
             default:
-                this.health = 50;
-                this.maxHealth = 50;
-                this.speed = 80; // Slower than player
-                this.damage = 10;
-                this.attackCooldown = 1000; // ms
+                this.health = Math.floor(55 * hpMultiplier); // Scales with level
+                this.maxHealth = this.health;
+                this.speed = 88; // Slower than player
+                this.damage = 11;
+                this.attackCooldown = 909; // ms
+                this.goldMin = 3; // 💰 Low gold reward (x3)
+                this.goldMax = 6; // 💰 (was 1-2, now 3-6)
                 break;
         }
         this.lastAttackTime = 0;
+
+        // Log HP scaling for debugging
+        if (currentLevel <= 4) {
+            console.log(`🎯 Level ${currentLevel}: ${this.enemyType} HP scaled to ${this.health} (${Math.floor(hpMultiplier * 100)}%)`);
+        }
     }
 
     configurePhysics() {
         switch (this.enemyType) {
+            case 'skull':
+                // Skull has 192x192 frames (same as goblin)
+                this.setScale(0.75); // Scale down from 192 to ~144
+                // Medium hitbox for skull
+                this.body.setSize(38, 55); // Slightly larger than goblin
+                this.body.setOffset(77, 88); // Center on the skull's body
+                break;
             case 'lancer':
                 // Lancer has 256x256 frames
                 this.setScale(0.6); // Scale down from 256 to ~154
@@ -128,7 +214,40 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     createAnimations() {
         const type = this.enemyType;
 
-        if (type === 'lancer') {
+        if (type === 'skull') {
+            // Skull has separate spritesheets for each animation
+            // Each spritesheet is a single row of frames (192x192 each)
+
+            if (!this.scene.anims.exists(`${type}-idle-anim`)) {
+                // Idle: 8 frames in skull-idle spritesheet
+                this.scene.anims.create({
+                    key: `${type}-idle-anim`,
+                    frames: this.scene.anims.generateFrameNumbers('skull-idle', { start: 0, end: 7 }),
+                    frameRate: 12,
+                    repeat: -1
+                });
+            }
+
+            if (!this.scene.anims.exists(`${type}-walk-anim`)) {
+                // Run: 6 frames in skull-run spritesheet
+                this.scene.anims.create({
+                    key: `${type}-walk-anim`,
+                    frames: this.scene.anims.generateFrameNumbers('skull-run', { start: 0, end: 5 }),
+                    frameRate: 10,
+                    repeat: -1
+                });
+            }
+
+            if (!this.scene.anims.exists(`${type}-attack-anim`)) {
+                // Attack: 7 frames in skull-attack spritesheet
+                this.scene.anims.create({
+                    key: `${type}-attack-anim`,
+                    frames: this.scene.anims.generateFrameNumbers('skull-attack', { start: 0, end: 6 }),
+                    frameRate: 12,
+                    repeat: 0
+                });
+            }
+        } else if (type === 'lancer') {
             // Lancer has separate spritesheets for each animation
             // Each spritesheet is a single row of frames (256x256 each)
 
@@ -137,7 +256,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
                 this.scene.anims.create({
                     key: `${type}-idle-anim`,
                     frames: this.scene.anims.generateFrameNumbers('lancer-idle', { start: 0, end: 6 }),
-                    frameRate: 8,
+                    frameRate: 12,
                     repeat: -1
                 });
             }
@@ -174,7 +293,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
                 this.scene.anims.create({
                     key: `${type}-idle-anim`,
                     frames: this.scene.anims.generateFrameNumbers('goblin-torch', { start: 0, end: 6 }),
-                    frameRate: 6,
+                    frameRate: 12,
                     repeat: -1
                 });
             }
@@ -405,6 +524,9 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
             console.log(`💥 Guard ${this.enemyType} pulled by damage! Now chasing player.`);
         }
 
+        // Alert nearby enemies when attacked
+        this.alertNearbyEnemies(120);
+
         // 20% chance for critical hit - ¡MÁS DOPAMINA!
         const isCritical = Math.random() < 0.2;
         const displayDamage = isCritical ? amount * 2 : amount;
@@ -476,6 +598,15 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
         this.isAttacking = false; // Clear attack state
         this.setVelocity(0, 0);
 
+        // 🔥 COMBO SYSTEM: Calculate base gold and apply kill streak bonus!
+        const baseGold = Phaser.Math.Between(this.goldMin, this.goldMax);
+        let finalGold = baseGold;
+
+        // Apply combo bonus if combo system exists
+        if (this.scene.comboSystem) {
+            finalGold = this.scene.comboSystem.onKill(baseGold);
+        }
+
         // Store position for skull
         const deathX = this.x;
         const deathY = this.y;
@@ -488,6 +619,12 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
         skull.setDepth(0); // Ground level
         skull.body.setSize(80, 80); // Smaller hitbox for easier collection
         skull.body.setOffset(24, 24); // Center the hitbox
+
+        // Store the FINAL gold value with combo bonus applied! 🔥
+        skull.setData('goldValue', finalGold);
+        // Keep min/max for backwards compatibility but they won't be used
+        skull.setData('goldMin', this.goldMin);
+        skull.setData('goldMax', this.goldMax);
 
         // Play the bouncing skull animation
         skull.play('death-skull-bounce');
@@ -516,6 +653,11 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
             this.scene.gameState.enemiesKilled++;
             this.scene.gameState.score += 10;
             this.scene.gameState.enemiesThisWave--;
+
+            // Track level statistics
+            if (this.scene.levelSystem) {
+                this.scene.levelSystem.addEnemyKill();
+            }
 
             // Random chance for bamboo seed
             if (Math.random() < 0.1) {

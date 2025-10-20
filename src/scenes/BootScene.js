@@ -118,6 +118,155 @@ export default class BootScene extends Phaser.Scene {
         this.load.on('filecomplete-spritesheet-lancer-attack', () => {
             console.log('✅ lancer-attack spritesheet loaded');
         });
+
+        // Skull (Enemy) - 192x192 frames
+        // Idle: 1536x192 = 8 frames
+        // Run: 1152x192 = 6 frames
+        // Attack: 1344x192 = 7 frames
+        console.log('🔵 Loading Skull enemy spritesheets...');
+        this.load.spritesheet('skull-idle', 'assets/Enemy Pack/Skull/Skull_Idle.png', {
+            frameWidth: 192,
+            frameHeight: 192
+        });
+        this.load.spritesheet('skull-run', 'assets/Enemy Pack/Skull/Skull_Run.png', {
+            frameWidth: 192,
+            frameHeight: 192
+        });
+        this.load.spritesheet('skull-attack', 'assets/Enemy Pack/Skull/Skull_Attack.png', {
+            frameWidth: 192,
+            frameHeight: 192
+        });
+
+        this.load.on('filecomplete-spritesheet-skull-idle', () => {
+            console.log('✅ skull-idle spritesheet loaded');
+        });
+        this.load.on('filecomplete-spritesheet-skull-run', () => {
+            console.log('✅ skull-run spritesheet loaded');
+        });
+        this.load.on('filecomplete-spritesheet-skull-attack', () => {
+            console.log('✅ skull-attack spritesheet loaded');
+        });
+
+        // Shaman (Enemy) - 192x192 frames
+        // Idle: 1536x192 = 8 frames
+        // Run: 768x192 = 4 frames
+        // Attack: 1920x192 = 10 frames
+        // Projectile: 384x128 = 3 frames (128x128)
+        // Explosion: 1152x128 = 9 frames (128x128)
+        console.log('🔵 Loading Shaman enemy spritesheets...');
+        this.load.spritesheet('shaman-idle', 'assets/Enemy Pack/Shaman/Shaman_Idle.png', {
+            frameWidth: 192,
+            frameHeight: 192
+        });
+        this.load.spritesheet('shaman-run', 'assets/Enemy Pack/Shaman/Shaman_Run.png', {
+            frameWidth: 192,
+            frameHeight: 192
+        });
+        this.load.spritesheet('shaman-attack', 'assets/Enemy Pack/Shaman/Shaman_Attack.png', {
+            frameWidth: 192,
+            frameHeight: 192
+        });
+        this.load.spritesheet('shaman-projectile', 'assets/Enemy Pack/Shaman/Shaman_Projectile.png', {
+            frameWidth: 128,
+            frameHeight: 128
+        });
+        this.load.spritesheet('shaman-explosion', 'assets/Enemy Pack/Shaman/Shaman_Explosion.png', {
+            frameWidth: 128,
+            frameHeight: 128
+        });
+
+        this.load.on('filecomplete-spritesheet-shaman-idle', () => {
+            console.log('✅ shaman-idle spritesheet loaded');
+        });
+        this.load.on('filecomplete-spritesheet-shaman-run', () => {
+            console.log('✅ shaman-run spritesheet loaded');
+        });
+        this.load.on('filecomplete-spritesheet-shaman-attack', () => {
+            console.log('✅ shaman-attack spritesheet loaded');
+        });
+        this.load.on('filecomplete-spritesheet-shaman-projectile', () => {
+            console.log('✅ shaman-projectile spritesheet loaded');
+        });
+        this.load.on('filecomplete-spritesheet-shaman-explosion', () => {
+            console.log('✅ shaman-explosion spritesheet loaded');
+        });
+
+        // Gnoll (Enemy) - 192x192 frames (except bone which is 64x64)
+        // Idle: 1152x192 = 6 frames
+        // Walk: 1536x192 = 8 frames
+        // Throw: 1536x192 = 8 frames
+        // Hit: 384x192 = 2 frames
+        // Bone: 256x64 = 4 frames (64x64)
+        console.log('🔵 Loading Gnoll enemy spritesheets...');
+        this.load.spritesheet('gnoll-idle', 'assets/Enemy Pack/Gnoll/Gnoll_Idle.png', {
+            frameWidth: 192,
+            frameHeight: 192
+        });
+        this.load.spritesheet('gnoll-walk', 'assets/Enemy Pack/Gnoll/Gnoll_Walk.png', {
+            frameWidth: 192,
+            frameHeight: 192
+        });
+        this.load.spritesheet('gnoll-throw', 'assets/Enemy Pack/Gnoll/Gnoll_Throw.png', {
+            frameWidth: 192,
+            frameHeight: 192
+        });
+        this.load.spritesheet('gnoll-hit', 'assets/Enemy Pack/Gnoll/Gnoll_Hit.png', {
+            frameWidth: 192,
+            frameHeight: 192
+        });
+        this.load.spritesheet('gnoll-bone', 'assets/Enemy Pack/Gnoll/Gnoll_Bone.png', {
+            frameWidth: 64,
+            frameHeight: 64
+        });
+
+        this.load.on('filecomplete-spritesheet-gnoll-idle', () => {
+            console.log('✅ gnoll-idle spritesheet loaded');
+        });
+        this.load.on('filecomplete-spritesheet-gnoll-walk', () => {
+            console.log('✅ gnoll-walk spritesheet loaded');
+        });
+        this.load.on('filecomplete-spritesheet-gnoll-throw', () => {
+            console.log('✅ gnoll-throw spritesheet loaded');
+        });
+        this.load.on('filecomplete-spritesheet-gnoll-hit', () => {
+            console.log('✅ gnoll-hit spritesheet loaded');
+        });
+        this.load.on('filecomplete-spritesheet-gnoll-bone', () => {
+            console.log('✅ gnoll-bone spritesheet loaded');
+        });
+
+        // HarpoonFish (Enemy) - 192x192 frames (harpoon is 64x64)
+        // Idle: 1536x192 = 8 frames
+        // Run: 1152x192 = 6 frames
+        // Throw: 1536x192 = 8 frames
+        // Harpoon: 64x64 single frame
+        console.log('🔵 Loading HarpoonFish enemy spritesheets...');
+        this.load.spritesheet('harpoonfish-idle', 'assets/Enemy Pack/Harpoon Fish/HarpoonFish_Idle.png', {
+            frameWidth: 192,
+            frameHeight: 192
+        });
+        this.load.spritesheet('harpoonfish-run', 'assets/Enemy Pack/Harpoon Fish/HarpoonFish_Run.png', {
+            frameWidth: 192,
+            frameHeight: 192
+        });
+        this.load.spritesheet('harpoonfish-throw', 'assets/Enemy Pack/Harpoon Fish/HarpoonFish_Throw.png', {
+            frameWidth: 192,
+            frameHeight: 192
+        });
+        this.load.image('harpoon', 'assets/Enemy Pack/Harpoon Fish/Harpoon.png');
+
+        this.load.on('filecomplete-spritesheet-harpoonfish-idle', () => {
+            console.log('✅ harpoonfish-idle spritesheet loaded');
+        });
+        this.load.on('filecomplete-spritesheet-harpoonfish-run', () => {
+            console.log('✅ harpoonfish-run spritesheet loaded');
+        });
+        this.load.on('filecomplete-spritesheet-harpoonfish-throw', () => {
+            console.log('✅ harpoonfish-throw spritesheet loaded');
+        });
+        this.load.on('filecomplete-image-harpoon', () => {
+            console.log('✅ harpoon image loaded');
+        });
     }
 
     loadVendorAssets() {
@@ -218,6 +367,13 @@ export default class BootScene extends Phaser.Scene {
 
         // Bamboo (if you have a sprite)
         // this.load.image('bamboo', 'assets/bamboo.png');
+
+        // Health Potion - collectible healing item
+        console.log('💊 Loading health potion...');
+        this.load.image('health-potion', 'assets/Potions/health potion.png');
+        this.load.on('filecomplete-image-health-potion', () => {
+            console.log('✅ health-potion image loaded');
+        });
     }
 
     loadSkillAssets() {
@@ -228,6 +384,10 @@ export default class BootScene extends Phaser.Scene {
         this.load.image('skill-lightning', 'assets/Skills/skill_lightning.png');
         this.load.image('skill-berserker', 'assets/Skills/skill_berserker.png');
         this.load.image('skill-summon-army', 'assets/Skills/skill_summon_army.png');
+        this.load.image('skill-ricochet', 'assets/Skills/skill_ricochet.png');
+        this.load.image('skill-arrow-shower', 'assets/Skills/skill_arrow_shower.png');
+        this.load.image('skill-prism', 'assets/Skills/skill_prism.png');
+        this.load.image('skill-infinity-arrows', 'assets/Skills/skill_infinity_arrows.png');
 
         // Gold coin sprites
         // G_Spawn: 896x128 = 7 frames of 128x128 (spawn animation)

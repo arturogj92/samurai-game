@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import BootScene from '../scenes/BootScene';
 import MainScene from '../scenes/MainScene';
 import UIScene from '../scenes/UIScene';
+import RestScreen from '../scenes/RestScreen';
 
 export const GameConfig = {
     type: Phaser.AUTO,
@@ -15,7 +16,7 @@ export const GameConfig = {
             debug: false // Debug mode disabled
         }
     },
-    scene: [BootScene, MainScene, UIScene],
+    scene: [BootScene, MainScene, UIScene, RestScreen],
     scale: {
         mode: Phaser.Scale.RESIZE,
         autoCenter: Phaser.Scale.CENTER_BOTH

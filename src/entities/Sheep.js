@@ -1,13 +1,13 @@
 import Phaser from 'phaser';
 
 /**
- * Sheep - Animated creature decoration with collision
+ * Sheep - Animated creature decoration (passable/walkable)
  *
  * Features:
  * - Multiple animations (idle, grass, move)
  * - Random behavior changes
  * - Depth sorting for proper layering
- * - Static physics body for collision detection
+ * - No collision - player can walk through sheep
  */
 export default class Sheep extends Phaser.Physics.Arcade.Sprite {
     constructor(scene, x, y) {
@@ -24,9 +24,8 @@ export default class Sheep extends Phaser.Physics.Arcade.Sprite {
         // Sheep use their base Y position for depth sorting
         this.setDepth(y);
 
-        // Configure collision body - sheep sprites are 128x128
-        this.body.setSize(50, 40); // Smaller collision area (reduced)
-        this.body.setOffset(39, 65); // Position at bottom of sheep
+        // Disable collision - make sheep passable/walkable
+        this.body.enable = false;
 
         // Create animations
         this.createAnimations(scene);

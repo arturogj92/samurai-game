@@ -1,15 +1,15 @@
 import Phaser from 'phaser';
 
 /**
- * Bush - Animated terrain decoration with collision
+ * Bush - Animated terrain decoration (decorative only, no collision)
  *
  * Features:
  * - Random bush type (1-4)
  * - Animated sprite (8 frame animation)
  * - Depth sorting for proper layering
- * - Static physics body for collision detection
+ * - No collision - purely decorative
  */
-export default class Bush extends Phaser.Physics.Arcade.Sprite {
+export default class Bush extends Phaser.GameObjects.Sprite {
     constructor(scene, x, y, bushType = null) {
         // If no bush type specified, pick random (1-4)
         const type = bushType || Phaser.Math.Between(1, 4);
@@ -18,7 +18,6 @@ export default class Bush extends Phaser.Physics.Arcade.Sprite {
         super(scene, x, y, textureKey, 0);
 
         scene.add.existing(this);
-        scene.physics.add.existing(this, true); // true = static body
 
         // Bush properties
         this.bushType = type;
@@ -28,10 +27,6 @@ export default class Bush extends Phaser.Physics.Arcade.Sprite {
         // Set depth based on Y position for proper layering
         // Bushes use their base Y position for depth sorting
         this.setDepth(y);
-
-        // Configure collision body - bushes are 128x128
-        this.body.setSize(50, 40); // Smaller collision area (reduced)
-        this.body.setOffset(39, 65); // Position at bottom of bush
 
         // Create animation immediately if it doesn't exist
         this.createAnimation(scene);
@@ -74,12 +69,4 @@ export default class Bush extends Phaser.Physics.Arcade.Sprite {
         }
     }
 
-    /**
-     * Get the collision radius for this bush
-     * Used for preventing overlapping placement
-     */
-    getCollisionRadius() {
-        // Bushes are 128x128, use a reasonable collision area
-        return 50;
-    }
 }

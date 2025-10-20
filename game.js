@@ -1215,9 +1215,6 @@ class Ninja {
         // Health system
         this.maxHealth = 100;
         this.health = this.maxHealth;
-        this.isInvulnerable = false;
-        this.invulnerabilityEndTime = 0;
-        this.invulnerabilityDuration = 1500; // 1.5 seconds of iframes
 
         // Player gets its OWN sprite instances to prevent any sharing issues
         // All animations now use Archer_Blue.png with proper row mapping
@@ -1259,9 +1256,9 @@ class Ninja {
     }
 
     update(timestamp, deltaTime) {
-        // Update invulnerability
-        if (this.isInvulnerable && timestamp > this.invulnerabilityEndTime) {
-            this.isInvulnerable = false;
+        // Don't process movement or actions when dying
+        if (this.isDying) {
+            return;
         }
 
         // Determine movement
@@ -1413,14 +1410,12 @@ class Ninja {
     }
 
     takeDamage(amount, timestamp) {
-        // Can't take damage if shielded or invulnerable
-        if (this.shielded || this.isInvulnerable) {
+        // Can't take damage if shielded
+        if (this.shielded) {
             return false;
         }
 
         this.health -= amount;
-        this.isInvulnerable = true;
-        this.invulnerabilityEndTime = timestamp + this.invulnerabilityDuration;
 
         // Trigger hurt animation (3 frames at 8 fps = 375ms)
         this.isHurt = true;
@@ -1757,6 +1752,10 @@ class Enemy {
         this.isDying = true;
         this.deathStartTime = timestamp;
         this.animationState = 'dead';
+
+        // Stop all movement when dying
+        this.vx = 0;
+        this.vy = 0;
 
         // Reset death animation to start from beginning
         const deathSprite = this.sprites.dead;
@@ -2526,8 +2525,8 @@ function checkCollisions() {
         }
     }
 
-    // Check ninja-enemy collisions - skip if shielded, invulnerable, or enemy is dying (OPTIMIZED)
-    if (!ninja.shielded && !ninja.isInvulnerable) {
+    // Check ninja-enemy collisions - skip if shielded or enemy is dying (OPTIMIZED)
+    if (!ninja.shielded) {
         for (let enemy of enemies) {
             if (enemy.isDying) continue; // Don't collide with dying enemies
 
@@ -2728,7 +2727,6 @@ function gameOver() {
 
     // Reset player health for next game
     ninja.health = ninja.maxHealth;
-    ninja.isInvulnerable = false;
 
     // Clear all bamboos, wood drops, and blood puddles
     bamboos.length = 0;

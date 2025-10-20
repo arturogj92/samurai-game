@@ -252,4 +252,113 @@ export default class DamageNumberSystem {
             });
         });
     }
+
+    /**
+     * Spawn a floating heal number at position
+     * @param {number} x - X position to spawn
+     * @param {number} y - Y position to spawn
+     * @param {number} heal - Heal amount to display
+     */
+    spawnHealNumber(x, y, heal) {
+        // Random horizontal offset for variety
+        const randomOffsetX = (Math.random() - 0.5) * 30;
+
+        // Green gradient for healing
+        const gradientColors = ['#00ff00', '#7FFF00'];
+        const fontSize = '24px';
+
+        // Create text object
+        const text = this.scene.add.text(x + randomOffsetX, y - 40, `+${heal}`, {
+            fontSize: fontSize,
+            fontFamily: 'Arial, Helvetica, sans-serif',
+            fontStyle: 'bold',
+            color: '#ffffff'
+        });
+
+        // Center the text
+        text.setOrigin(0.5, 0.5);
+
+        // Apply gradient
+        const gradient = text.context.createLinearGradient(0, 0, 0, text.height);
+        gradient.addColorStop(0, gradientColors[0]);
+        gradient.addColorStop(1, gradientColors[1]);
+        text.setFill(gradient);
+
+        // Glow effect
+        text.setShadow(2, 2, '#000000', 4, true, true);
+
+        // Start with bigger scale
+        text.setScale(0);
+
+        // Random side direction
+        const sideDirection = Math.random() > 0.5 ? 1 : -1;
+        const horizontalDistance = 50 + Math.random() * 30;
+
+        // Animation - pop in, rise, fade
+        this.scene.tweens.add({
+            targets: text,
+            scaleX: 1.5,
+            scaleY: 1.5,
+            duration: 100,
+            ease: 'Back.easeOut',
+            onComplete: () => {
+                this.scene.tweens.add({
+                    targets: text,
+                    y: y - 80,
+                    scaleX: 1.0,
+                    scaleY: 1.0,
+                    duration: 150,
+                    ease: 'Quad.easeOut',
+                    onComplete: () => {
+                        this.scene.tweens.add({
+                            targets: text,
+                            x: x + randomOffsetX + (horizontalDistance * sideDirection),
+                            y: y - 40,
+                            scaleX: 0.5,
+                            scaleY: 0.5,
+                            alpha: 0,
+                            duration: 250,
+                            ease: 'Quad.easeIn',
+                            onComplete: () => {
+                                text.destroy();
+                            }
+                        });
+                    }
+                });
+            }
+        });
+
+        // Green healing particles
+        this.createHealParticles(x, y);
+    }
+
+    /**
+     * Create green particle burst for healing
+     */
+    createHealParticles(x, y) {
+        const particleCount = 10;
+
+        for (let i = 0; i < particleCount; i++) {
+            const angle = (Math.PI * 2 / particleCount) * i;
+            const distance = 40 + Math.random() * 20;
+
+            const particle = this.scene.add.graphics();
+            particle.fillStyle(0x00ff00, 1);
+            particle.fillCircle(0, 0, 4);
+            particle.x = x;
+            particle.y = y - 30;
+
+            this.scene.tweens.add({
+                targets: particle,
+                x: x + Math.cos(angle) * distance,
+                y: y - 30 + Math.sin(angle) * distance,
+                alpha: 0,
+                duration: 350,
+                ease: 'Power2',
+                onComplete: () => {
+                    particle.destroy();
+                }
+            });
+        }
+    }
 }

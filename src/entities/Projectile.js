@@ -7,7 +7,7 @@ export default class Projectile extends Phaser.GameObjects.Sprite {
         // CRITICAL: Store scene reference
         this.scene = scene;
 
-        this.damage = 20;
+        this.damage = 12;
         scene.add.existing(this);
         this.setScale(0.8);
 
@@ -31,6 +31,10 @@ export default class Projectile extends Phaser.GameObjects.Sprite {
         // Arrow_shot.png: 63x14 pixels, tip at (63, 7)
         // With scale 0.8: tip is ~25 pixels from center
         this.tipDistance = 25;
+
+        // Ricochet system
+        this.hasRicocheted = false;  // Track if this arrow already bounced once
+        this.ricochetEnabled = false; // Set to true when player has ricochet ability
     }
 
     // Get the tip position of the arrow (where raycast should start)
@@ -49,6 +53,12 @@ export default class Projectile extends Phaser.GameObjects.Sprite {
     }
 
     update() {
+        // If arrow is stuck to ground (from Arrow Storm), stay put
+        if (this.stuckToGround) {
+            // Don't move, don't update - just stay stuck in ground
+            return;
+        }
+
         // If arrow is stuck to a player, follow it
         if (this.stuckToPlayer) {
             // Check if player is still alive
@@ -141,5 +151,55 @@ export default class Projectile extends Phaser.GameObjects.Sprite {
     stop() {
         this.velocityX = 0;
         this.velocityY = 0;
+    }
+
+    /**
+     * Find the nearest enemy to ricochet to
+     * @param {Phaser.GameObjects.GameObject} excludeEnemy - Enemy to exclude (the one just hit)
+     * @returns {Phaser.GameObjects.GameObject|null} - Nearest enemy or null
+     */
+    findNearestEnemy(excludeEnemy) {
+        if (!this.scene || !this.scene.enemies) return null;
+
+        const enemies = this.scene.enemies.getChildren()
+            .filter(e => e.active && !e.isDying && e.health > 0 && e !== excludeEnemy);
+
+        if (enemies.length === 0) return null;
+
+        let nearest = null;
+        let minDist = Infinity;
+
+        for (const enemy of enemies) {
+            const dist = Phaser.Math.Distance.Between(this.x, this.y, enemy.x, enemy.y);
+            if (dist < minDist) {
+                minDist = dist;
+                nearest = enemy;
+            }
+        }
+
+        return nearest;
+    }
+
+    /**
+     * Redirect the projectile towards a new target (for ricochet)
+     * @param {number} targetX - Target X position
+     * @param {number} targetY - Target Y position
+     * @param {number} speed - Speed in pixels/second (default 300)
+     */
+    redirectTo(targetX, targetY, speed = 300) {
+        // Calculate angle to new target
+        const angle = Phaser.Math.Angle.Between(this.x, this.y, targetX, targetY);
+
+        // Update rotation
+        this.rotation = angle;
+
+        // Set new velocity
+        const velocityX = Math.cos(angle) * speed;
+        const velocityY = Math.sin(angle) * speed;
+        this.setVelocity(velocityX, velocityY);
+
+        // Reset previous position for raycast
+        this.prevX = this.x;
+        this.prevY = this.y;
     }
 }

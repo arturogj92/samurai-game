@@ -17,24 +17,21 @@ export default class Tree extends Phaser.Physics.Arcade.Sprite {
 
         super(scene, x, y, textureKey, 0);
 
+        // Add to scene - staticGroup will handle physics
         scene.add.existing(this);
-        scene.physics.add.existing(this, true); // true = static body
 
         // Tree properties
         this.treeType = type;
         this.textureKey = textureKey;
         this.setScale(1.0);
 
-        // Set depth based on Y position for proper layering
-        // Trees use their base Y position for depth sorting
-        // When player Y < tree Y: player appears behind tree (correct!)
-        // When player Y > tree Y: player appears in front of tree (correct!)
-        this.setDepth(y);
-
-        // Configure collision body - smaller circle around trunk base
-        // Tree sprite is 120x200, but we only want collision on the trunk
-        this.body.setSize(25, 25); // Very small collision area at the base (reduced)
-        this.body.setOffset(47, 150); // Position at bottom/trunk of tree
+        // Set depth based on BOTTOM of sprite for proper layering
+        // Tree sprite is 120x200, so we need to add half the height to get the base
+        // The sprite origin is at center (0.5, 0.5) by default
+        // So the bottom Y position is: y + (height / 2)
+        const spriteHeight = 200; // Tree sprite height
+        const bottomY = y + (spriteHeight / 2); // Base of the tree
+        this.setDepth(bottomY);
 
         // Create animation immediately if it doesn't exist
         this.createAnimation(scene);
@@ -49,6 +46,23 @@ export default class Tree extends Phaser.Physics.Arcade.Sprite {
         });
 
         console.log(`🌳 Tree type ${type} created at (${Math.floor(x)}, ${Math.floor(y)})`);
+    }
+
+    /**
+     * Setup physics body - called AFTER adding to staticGroup
+     */
+    setupPhysics() {
+        if (!this.body) {
+            console.warn('⚠️ Tree: No physics body found! Make sure tree is added to staticGroup first.');
+            return;
+        }
+
+        // Configure collision body - balanced trunk collision at the base
+        // Tree sprite is 120x200, collision covers trunk base
+        this.body.setSize(50, 50); // Trunk collision - square at base
+        this.body.setOffset(35, 150); // Position at very bottom (150 + 50 = 200)
+
+        console.log(`🔧 Tree physics configured: size 50x50 at offset (35, 150)`);
     }
 
     createAnimation(scene) {

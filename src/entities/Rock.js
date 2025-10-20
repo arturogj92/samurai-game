@@ -17,8 +17,8 @@ export default class Rock extends Phaser.Physics.Arcade.Sprite {
 
         super(scene, x, y, textureKey);
 
+        // Add to scene - staticGroup will handle physics
         scene.add.existing(this);
-        scene.physics.add.existing(this, true); // true = static body
 
         // Rock properties
         this.rockType = type;
@@ -27,11 +27,23 @@ export default class Rock extends Phaser.Physics.Arcade.Sprite {
         // Set depth based on Y position for proper layering
         this.setDepth(y); // Same Y-based sorting as other objects
 
+        console.log(`🪨 Rock type ${type} created at (${Math.floor(x)}, ${Math.floor(y)})`);
+    }
+
+    /**
+     * Setup physics body - called AFTER adding to staticGroup
+     */
+    setupPhysics() {
+        if (!this.body) {
+            console.warn('⚠️ Rock: No physics body found! Make sure rock is added to staticGroup first.');
+            return;
+        }
+
         // Configure collision body - rocks are 64x64
         this.body.setSize(30, 30); // Very small collision area (reduced)
         this.body.setOffset(17, 17); // Center the collision body
 
-        console.log(`🪨 Rock type ${type} created at (${Math.floor(x)}, ${Math.floor(y)})`);
+        console.log(`🔧 Rock physics configured: size 30x30 at offset (17, 17)`);
     }
 
     /**

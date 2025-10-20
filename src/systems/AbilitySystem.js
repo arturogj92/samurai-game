@@ -40,6 +40,30 @@ export default class AbilitySystem {
                 cooldown: 20000,
                 lastUsed: -999999,
                 enabled: true
+            },
+            ricochet: {
+                cooldown: 10000, // 10 seconds cooldown
+                lastUsed: -999999,
+                duration: 5000, // 5 seconds active
+                enabled: true
+            },
+            arrowStorm: {
+                cooldown: 15000, // 15 seconds cooldown
+                lastUsed: -999999,
+                duration: 3000, // 3 seconds of arrow rain
+                enabled: true
+            },
+            prism: {
+                cooldown: 15000, // 15 seconds cooldown
+                lastUsed: -999999,
+                duration: 10000, // 10 seconds active
+                enabled: true
+            },
+            infinityArrows: {
+                cooldown: 35000, // 35 seconds cooldown (ultimate ability)
+                lastUsed: -999999,
+                duration: 2000, // 2 seconds active
+                enabled: true
             }
         };
 
@@ -64,8 +88,33 @@ export default class AbilitySystem {
         this.originalSpeed = null;
         this.originalFireRate = null;
 
+        // Ricochet state
+        this.ricochetActive = false;
+        this.ricochetEndTime = 0;
+        this.ricochetGraphic = null;
+
         // Tutorial state
         this.hasShownHoldETutorial = false;
+
+        // Prism state
+        this.prismActive = false;
+        this.prismEndTime = 0;
+        this.prismGraphic = null;
+        this.prismAngle = 0; // Current orbital angle
+        this.prismRadius = 80; // Orbital radius
+        this.prismOrbitSpeed = (Math.PI * 2) / 2500; // Full rotation in 2.5 seconds (radians per ms)
+        this.prismDetectionRadius = 50; // Distance to detect projectiles
+        this.processedProjectiles = new Set(); // Track which projectiles we've already split
+
+        // Infinity Arrows state
+        this.infinityArrowsActive = false;
+        this.infinityArrowsEndTime = 0;
+        this.infinityArrowsGraphic = null;
+        this.originalAutoFireCooldown = null;
+
+        // Rapid Fire (post-dash) state
+        this.rapidFireActive = false;
+        this.rapidFireEndTime = 0;
     }
 
     /**
@@ -136,6 +185,11 @@ export default class AbilitySystem {
                 // End position effects
                 this.createDashEndEffect(dashX, dashY);
 
+                // Activate rapid fire for 1 second (5x fire rate)
+                this.rapidFireActive = true;
+                this.rapidFireEndTime = time + 1000; // 1 second duration
+                console.log('🔥 Rapid Fire activated! (5x fire rate for 1s)');
+
                 // Keep invulnerability for a bit longer
                 this.scene.time.delayedCall(200, () => {
                     player.isInvulnerable = false;
@@ -166,6 +220,15 @@ export default class AbilitySystem {
         // Visual effect - start glow
         player.setTint(0xffff00);
 
+        // Notify all MiniArchers to start charging
+        if (this.scene.miniArchers && this.scene.miniArchers.length > 0) {
+            this.scene.miniArchers.forEach(miniArcher => {
+                if (miniArcher && miniArcher.active) {
+                    miniArcher.startChargingBurst();
+                }
+            });
+        }
+
         console.log('⚡ Burst charging started!');
         return true;
     }
@@ -192,8 +255,8 @@ export default class AbilitySystem {
 
         // Scale based on charge: 0.7 to 1.2
         const arrowScale = 0.7 + (chargeLevel * 0.5);
-        // Damage based on charge: 15 to 50
-        const arrowDamage = 15 + (chargeLevel * 35);
+        // Damage based on charge: 9 to 30
+        const arrowDamage = 9 + (chargeLevel * 21);
 
         // Stop charging
         this.isChargingBurst = false;
@@ -249,6 +312,11 @@ export default class AbilitySystem {
             projectile.setScale(arrowScale);
             projectile.setTint(colors[i]);
 
+            // Enable ricochet if player has the ability
+            if (player.ricochetEnabled) {
+                projectile.ricochetEnabled = true;
+            }
+
             const velocityX = Math.cos(angle) * speed;
             const velocityY = Math.sin(angle) * speed;
 
@@ -257,6 +325,15 @@ export default class AbilitySystem {
 
             // Add trail effect to each projectile
             this.createProjectileTrail(projectile, angle, colors[i]);
+        }
+
+        // Notify all MiniArchers to release burst with same charge level
+        if (this.scene.miniArchers && this.scene.miniArchers.length > 0) {
+            this.scene.miniArchers.forEach(miniArcher => {
+                if (miniArcher && miniArcher.active) {
+                    miniArcher.releaseBurst(chargeLevel);
+                }
+            });
         }
 
         player.clearTint();
@@ -387,44 +464,50 @@ export default class AbilitySystem {
     }
 
     /**
+     * Ricochet ability (G) - Timed buff that makes arrows bounce
+     */
+    ricochet(time) {
+        if (!this.canUseAbility('ricochet', time)) return false;
+
+        const player = this.scene.player;
+
+        // Activate ricochet mode
+        this.ricochetActive = true;
+        this.ricochetEndTime = time + this.abilities.ricochet.duration;
+        player.ricochetEnabled = true;
+
+        // Create activation effect
+        this.createRicochetActivationEffect(player.x, player.y);
+
+        // Create ricochet aura
+        this.createRicochetAura();
+
+        // Apply yellow tint to player
+        player.setTint(0xffaa00);
+
+        // Schedule ricochet end
+        this.scene.time.delayedCall(this.abilities.ricochet.duration, () => {
+            this.deactivateRicochet();
+        });
+
+        this.abilities.ricochet.lastUsed = time;
+        console.log('⚡ RICOCHET ACTIVATED! Arrows will bounce for 5 seconds!');
+        return true;
+    }
+
+    /**
      * Update method - called every frame
      */
-    update(time) {
+    update(time, delta) {
         // Update shield visual position and effects
         if (this.shieldActive && this.shieldGraphic) {
             this.shieldGraphic.x = this.scene.player.x;
             this.shieldGraphic.y = this.scene.player.y;
 
-            // Calculate remaining time percentage
-            const timeRemaining = this.shieldEndTime - time;
-            const timePercent = timeRemaining / this.abilities.shield.duration;
+            // Constant blue color throughout duration
+            const shieldColor = 0x0099ff; // Blue constant
 
-            // Dynamic color based on remaining time
-            let shieldColor, glowColor, intensity;
-            if (timePercent > 0.7) {
-                // 100-70%: Bright blue
-                shieldColor = 0x00ffff;
-                glowColor = 0x00ccff;
-                intensity = 1.0;
-            } else if (timePercent > 0.4) {
-                // 70-40%: Cyan
-                shieldColor = 0x00ffaa;
-                glowColor = 0x00ddaa;
-                intensity = 1.2;
-            } else if (timePercent > 0.2) {
-                // 40-20%: Yellow warning
-                shieldColor = 0xffff00;
-                glowColor = 0xffcc00;
-                intensity = 1.5;
-            } else {
-                // 20-0%: Red critical with flash
-                const flash = Math.sin(time / 100) > 0 ? 1 : 0.5;
-                shieldColor = 0xff0000;
-                glowColor = 0xff3333;
-                intensity = 2.0 * flash;
-            }
-
-            // Update player tint color based on shield status
+            // Update player tint color (always blue)
             const player = this.scene.player;
             if (player) {
                 player.setTint(shieldColor);
@@ -437,12 +520,60 @@ export default class AbilitySystem {
             this.berserkerGraphic.y = this.scene.player.y;
         }
 
+        // Update ricochet aura position
+        if (this.ricochetActive && this.ricochetGraphic) {
+            this.ricochetGraphic.x = this.scene.player.x;
+            this.ricochetGraphic.y = this.scene.player.y;
+        }
+
+        // Update prism orbital position and check projectiles
+        if (this.prismActive && this.prismGraphic) {
+            const player = this.scene.player;
+
+            // Update orbital angle (continuous rotation)
+            this.prismAngle += this.prismOrbitSpeed * delta;
+
+            // Calculate prism position based on orbital angle
+            const prismX = player.x + Math.cos(this.prismAngle) * this.prismRadius;
+            const prismY = player.y + Math.sin(this.prismAngle) * this.prismRadius;
+
+            this.prismGraphic.x = prismX;
+            this.prismGraphic.y = prismY;
+
+            // Rotate prism sprite for visual effect
+            this.prismGraphic.rotation += 0.05;
+
+            // Check all projectiles for proximity to prism
+            this.checkProjectilesNearPrism(prismX, prismY, time);
+        }
+
+        // Update infinity arrows aura position
+        if (this.infinityArrowsActive && this.infinityArrowsGraphic) {
+            this.infinityArrowsGraphic.x = this.scene.player.x;
+            this.infinityArrowsGraphic.y = this.scene.player.y;
+        }
+
+        // Deactivate rapid fire after duration
+        if (this.rapidFireActive && time >= this.rapidFireEndTime) {
+            this.rapidFireActive = false;
+            console.log('🔥 Rapid Fire ended');
+        }
+
         // Update burst charging
         if (this.isChargingBurst) {
             const player = this.scene.player;
             const chargeTime = time - this.burstChargeStartTime;
             const chargeLevel = Math.min(chargeTime / 3000, 1); // 0-1 over 3 seconds
             this.burstChargeLevel = chargeLevel;
+
+            // Update MiniArchers charge level
+            if (this.scene.miniArchers && this.scene.miniArchers.length > 0) {
+                this.scene.miniArchers.forEach(miniArcher => {
+                    if (miniArcher && miniArcher.active && miniArcher.isChargingBurst) {
+                        miniArcher.burstChargeLevel = chargeLevel;
+                    }
+                });
+            }
 
             // Reduce player speed progressively (300 -> 0 over 3 seconds)
             const speedMultiplier = 1 - chargeLevel;
@@ -1952,5 +2083,1054 @@ export default class AbilitySystem {
         });
 
         console.log('💡 Tutorial: HOLD E TO CHARGE shown');
+    }
+
+    /**
+     * RICOCHET VISUAL EFFECTS
+     */
+
+    /**
+     * Create ricochet activation effect
+     */
+    createRicochetActivationEffect(x, y) {
+        // Yellow/orange energy wave
+        const wave = this.scene.add.graphics();
+        wave.lineStyle(3, 0xffaa00, 0.9);
+        wave.strokeCircle(x, y, 15);
+
+        this.scene.tweens.add({
+            targets: wave,
+            scaleX: 4,
+            scaleY: 4,
+            alpha: 0,
+            duration: 500,
+            ease: 'Power2',
+            onComplete: () => wave.destroy()
+        });
+
+        // Activation flash
+        const flash = this.scene.add.circle(x, y, 20, 0xffff00, 0.8);
+
+        this.scene.tweens.add({
+            targets: flash,
+            scale: 3,
+            alpha: 0,
+            duration: 400,
+            ease: 'Power3',
+            onComplete: () => flash.destroy()
+        });
+
+        // Particle burst - yellow/orange particles
+        for (let i = 0; i < 20; i++) {
+            const angle = (Math.PI * 2 * i) / 20;
+            const colors = [0xffff00, 0xffaa00, 0xff9900];
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            const particle = this.scene.add.circle(x, y, Phaser.Math.Between(3, 5), color);
+
+            const distance = Phaser.Math.Between(30, 60);
+            this.scene.tweens.add({
+                targets: particle,
+                x: x + Math.cos(angle) * distance,
+                y: y + Math.sin(angle) * distance,
+                alpha: 0,
+                scale: 0,
+                duration: Phaser.Math.Between(300, 500),
+                ease: 'Power2',
+                onComplete: () => particle.destroy()
+            });
+        }
+
+        // Small camera shake
+        this.scene.cameras.main.shake(150, 0.003);
+    }
+
+    /**
+     * Create ricochet deactivation effect
+     */
+    createRicochetDeactivationEffect(x, y) {
+        // Simple fade out ring
+        const ring = this.scene.add.graphics();
+        ring.lineStyle(2, 0x666666, 0.6);
+        ring.strokeCircle(x, y, 25);
+
+        this.scene.tweens.add({
+            targets: ring,
+            alpha: 0,
+            duration: 300,
+            ease: 'Power2',
+            onComplete: () => ring.destroy()
+        });
+    }
+
+    /**
+     * Create ricochet aura around player
+     */
+    createRicochetAura() {
+        if (this.ricochetGraphic) {
+            this.ricochetGraphic.destroy();
+        }
+
+        const player = this.scene.player;
+
+        // Container for ricochet graphics
+        this.ricochetGraphic = this.scene.add.container(player.x, player.y);
+        this.ricochetGraphic.setDepth(player.depth - 1); // Behind player
+
+        // Only sparkle particles (no glow)
+        this.createRicochetSparkles();
+    }
+
+    /**
+     * Create sparkle particles around ricochet aura
+     */
+    createRicochetSparkles() {
+        // Continuously spawn sparkles while ricochet is active
+        const sparkleEvent = this.scene.time.addEvent({
+            delay: 100,
+            callback: () => {
+                if (!this.ricochetActive) {
+                    sparkleEvent.remove();
+                    return;
+                }
+
+                const player = this.scene.player;
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Phaser.Math.Between(28, 40);
+                const x = player.x + Math.cos(angle) * distance;
+                const y = player.y + Math.sin(angle) * distance;
+
+                const colors = [0xffff00, 0xffaa00, 0xff9900];
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                const sparkle = this.scene.add.circle(x, y, Phaser.Math.Between(2, 4), color, 0.9);
+
+                // Float upward
+                this.scene.tweens.add({
+                    targets: sparkle,
+                    y: y - Phaser.Math.Between(20, 40),
+                    alpha: 0,
+                    scale: 0,
+                    duration: Phaser.Math.Between(400, 700),
+                    ease: 'Power2',
+                    onComplete: () => sparkle.destroy()
+                });
+            },
+            loop: true
+        });
+    }
+
+    /**
+     * Deactivate ricochet mode
+     */
+    deactivateRicochet() {
+        this.ricochetActive = false;
+
+        const player = this.scene.player;
+
+        // Clear player tint
+        player.clearTint();
+
+        // Disable ricochet
+        player.ricochetEnabled = false;
+
+        // Destroy ricochet aura
+        if (this.ricochetGraphic) {
+            this.scene.tweens.add({
+                targets: this.ricochetGraphic,
+                alpha: 0,
+                duration: 300,
+                onComplete: () => {
+                    if (this.ricochetGraphic) {
+                        this.ricochetGraphic.destroy();
+                        this.ricochetGraphic = null;
+                    }
+                }
+            });
+        }
+
+        // Create deactivation effect
+        this.createRicochetDeactivationEffect(player.x, player.y);
+
+        console.log('❌ Ricochet deactivated');
+    }
+
+    /**
+     * Arrow Storm ability (M) - Rain of arrows from the sky at cursor position
+     */
+    arrowStorm(time) {
+        if (!this.canUseAbility('arrowStorm', time)) return false;
+
+        // Get cursor position in world coordinates
+        const pointer = this.scene.input.activePointer;
+        const targetX = pointer.worldX;
+        const targetY = pointer.worldY;
+
+        const player = this.scene.player;
+        const arrowCount = 30;
+        const duration = this.abilities.arrowStorm.duration;
+        const radius = 150; // Area radius where arrows will fall
+        const damage = 1; // Base damage per arrow (low damage but high volume)
+
+        // Spawn arrows over time (no indicator)
+        for (let i = 0; i < arrowCount; i++) {
+            const delay = (i / arrowCount) * duration; // Spread over duration
+
+            this.scene.time.delayedCall(delay, () => {
+                // Random position within radius
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.random() * radius;
+                const finalX = targetX + Math.cos(angle) * distance;
+                const finalY = targetY + Math.sin(angle) * distance;
+
+                // Start arrow high above the target
+                const startY = finalY - 400;
+
+                // Create the arrow projectile
+                const Projectile = this.scene.projectiles.classType;
+                const arrow = new Projectile(
+                    this.scene,
+                    finalX,
+                    startY,
+                    'arrow'
+                );
+
+                // Add to group for tracking
+                this.scene.projectiles.add(arrow);
+
+                // Set frame 0 (flying arrow)
+                arrow.setFrame(0);
+
+                // Reset stuck state
+                arrow.stuckToEnemy = null;
+                arrow.stuckOffsetX = 0;
+                arrow.stuckOffsetY = 0;
+
+                // Set damage (affected by berserker)
+                arrow.damage = damage * (player.damageMultiplier || 1);
+
+                // Rotate arrow to point down
+                arrow.rotation = Math.PI / 2; // 90 degrees = pointing down
+
+                // Enable ricochet if player has the ability active
+                if (player.ricochetEnabled) {
+                    arrow.ricochetEnabled = true;
+                }
+
+                // Set depth so arrows appear above ground but below UI
+                arrow.setDepth(100);
+
+                // Create trail effect
+                this.createArrowStormTrail(arrow);
+
+                // Animate arrow falling down with tween (stops at exact position)
+                const fallDuration = 500; // ms to fall
+
+                // Update prevX/prevY for collision detection before tween starts
+                arrow.prevX = arrow.x;
+                arrow.prevY = arrow.y;
+
+                this.scene.tweens.add({
+                    targets: arrow,
+                    y: finalY,
+                    duration: fallDuration,
+                    ease: 'Cubic.easeIn',
+                    onUpdate: () => {
+                        // Update prevX/prevY every frame for collision detection
+                        // This allows the raycast system to work with tween movement
+                        if (arrow.active && !arrow.stuckToEnemy && !arrow.stuckToHut && !arrow.stuckToGround) {
+                            arrow.prevX = arrow.x;
+                            arrow.prevY = arrow.y - 10; // Previous Y was slightly higher
+                        }
+                    },
+                    onComplete: () => {
+                        // Only land if arrow hasn't hit an enemy/hut already
+                        if (!arrow.stuckToEnemy && !arrow.stuckToHut) {
+                            // Arrow landed - stop it exactly here
+                            arrow.velocityX = 0;
+                            arrow.velocityY = 0;
+
+                            // Change to stuck texture (arrow-hit = arrow without tip)
+                            arrow.setTexture('arrow-hit');
+
+                            // Create impact effect
+                            this.createArrowStormImpact(finalX, finalY);
+
+                            // Mark arrow as "stuck to ground" so it doesn't move
+                            arrow.stuckToGround = true;
+
+                            // Despawn arrow after 2 seconds
+                            this.scene.time.delayedCall(2000, () => {
+                                if (arrow && arrow.active) {
+                                    arrow.destroy();
+                                }
+                            });
+                        }
+                    }
+                });
+            });
+        }
+
+        this.abilities.arrowStorm.lastUsed = time;
+        console.log(`🌧️ Arrow Storm activated at (${targetX.toFixed(0)}, ${targetY.toFixed(0)})! 30 arrows incoming!`);
+        return true;
+    }
+
+    /**
+     * Create target indicator on ground where arrows will fall
+     */
+    createArrowStormTargetIndicator(x, y, radius, duration) {
+        // Pulsing circle indicator
+        const indicator = this.scene.add.graphics();
+        indicator.lineStyle(3, 0xff6600, 0.7);
+        indicator.strokeCircle(x, y, radius);
+        indicator.setDepth(1);
+
+        // Inner circle
+        const innerCircle = this.scene.add.graphics();
+        innerCircle.lineStyle(2, 0xffaa00, 0.5);
+        innerCircle.strokeCircle(x, y, radius * 0.7);
+        innerCircle.setDepth(1);
+
+        // Pulsing animation
+        this.scene.tweens.add({
+            targets: [indicator, innerCircle],
+            alpha: 0.3,
+            scaleX: 1.1,
+            scaleY: 1.1,
+            duration: 500,
+            yoyo: true,
+            repeat: Math.ceil(duration / 1000)
+        });
+
+        // Warning flash
+        const warning = this.scene.add.circle(x, y, radius, 0xff0000, 0.2);
+        warning.setDepth(1);
+
+        this.scene.tweens.add({
+            targets: warning,
+            alpha: 0,
+            duration: 300,
+            onComplete: () => warning.destroy()
+        });
+
+        // Clean up after duration
+        this.scene.time.delayedCall(duration, () => {
+            indicator.destroy();
+            innerCircle.destroy();
+        });
+
+        // Screen shake warning
+        this.scene.cameras.main.shake(100, 0.002);
+    }
+
+    /**
+     * Create trail effect for falling arrows
+     */
+    createArrowStormTrail(arrow) {
+        const trailEvent = this.scene.time.addEvent({
+            delay: 40,
+            callback: () => {
+                if (!arrow.active) {
+                    trailEvent.remove();
+                    return;
+                }
+
+                const trail = this.scene.add.circle(
+                    arrow.x,
+                    arrow.y - 10,
+                    3,
+                    0xffaa00,
+                    0.6
+                );
+                trail.setDepth(arrow.depth - 1);
+
+                this.scene.tweens.add({
+                    targets: trail,
+                    alpha: 0,
+                    scale: 0.2,
+                    duration: 200,
+                    ease: 'Power2',
+                    onComplete: () => trail.destroy()
+                });
+            },
+            loop: true
+        });
+
+        // Clean up trail when arrow is destroyed
+        arrow.once('destroy', () => {
+            trailEvent.remove();
+        });
+    }
+
+    /**
+     * Create impact effect when arrow hits ground
+     */
+    createArrowStormImpact(x, y) {
+        // Impact flash
+        const flash = this.scene.add.circle(x, y, 8, 0xffff00, 0.8);
+        flash.setDepth(50);
+
+        this.scene.tweens.add({
+            targets: flash,
+            scale: 2,
+            alpha: 0,
+            duration: 200,
+            ease: 'Power2',
+            onComplete: () => flash.destroy()
+        });
+
+        // Impact ring
+        const ring = this.scene.add.graphics();
+        ring.lineStyle(2, 0xffaa00, 0.7);
+        ring.strokeCircle(x, y, 5);
+        ring.setDepth(50);
+
+        this.scene.tweens.add({
+            targets: ring,
+            scaleX: 2,
+            scaleY: 2,
+            alpha: 0,
+            duration: 300,
+            ease: 'Power2',
+            onComplete: () => ring.destroy()
+        });
+
+        // Impact particles
+        for (let i = 0; i < 6; i++) {
+            const angle = (Math.PI * 2 * i) / 6;
+            const particle = this.scene.add.circle(
+                x,
+                y,
+                2,
+                0xff9900,
+                0.8
+            );
+            particle.setDepth(50);
+
+            const distance = Phaser.Math.Between(10, 20);
+            this.scene.tweens.add({
+                targets: particle,
+                x: x + Math.cos(angle) * distance,
+                y: y + Math.sin(angle) * distance,
+                alpha: 0,
+                scale: 0,
+                duration: 250,
+                ease: 'Power2',
+                onComplete: () => particle.destroy()
+            });
+        }
+    }
+
+    /**
+     * PRISM ABILITY (T) - Orbital prism that triples projectiles
+     */
+    prism(time) {
+        if (!this.canUseAbility('prism', time)) return false;
+
+        const player = this.scene.player;
+
+        // Activate prism
+        this.prismActive = true;
+        this.prismEndTime = time + this.abilities.prism.duration;
+        this.prismAngle = 0; // Start at angle 0
+        this.processedProjectiles.clear(); // Reset processed projectiles
+
+        // Create activation effect
+        this.createPrismActivationEffect(player.x, player.y);
+
+        // Create prism visual
+        this.createPrismGraphic();
+
+        // Schedule prism end
+        this.scene.time.delayedCall(this.abilities.prism.duration, () => {
+            this.deactivatePrism();
+        });
+
+        this.abilities.prism.lastUsed = time;
+        console.log('💎 PRISM ACTIVATED! Projectiles will triple for 10 seconds!');
+        return true;
+    }
+
+    /**
+     * Create prism graphic - crystalline orbital sprite
+     */
+    createPrismGraphic() {
+        if (this.prismGraphic) {
+            this.prismGraphic.destroy();
+        }
+
+        const player = this.scene.player;
+
+        // Create prism as a graphics object (diamond shape with rainbow gradient)
+        this.prismGraphic = this.scene.add.graphics();
+
+        // Calculate initial position
+        const prismX = player.x + Math.cos(this.prismAngle) * this.prismRadius;
+        const prismY = player.y + Math.sin(this.prismAngle) * this.prismRadius;
+
+        this.prismGraphic.x = prismX;
+        this.prismGraphic.y = prismY;
+        this.prismGraphic.setDepth(player.depth + 1); // Above player
+
+        // Draw diamond shape (prism)
+        const size = 20;
+        this.prismGraphic.lineStyle(3, 0xffffff, 0.9);
+        this.prismGraphic.fillStyle(0x00ffff, 0.6);
+        this.prismGraphic.beginPath();
+        this.prismGraphic.moveTo(0, -size); // Top
+        this.prismGraphic.lineTo(size, 0); // Right
+        this.prismGraphic.lineTo(0, size); // Bottom
+        this.prismGraphic.lineTo(-size, 0); // Left
+        this.prismGraphic.closePath();
+        this.prismGraphic.fillPath();
+        this.prismGraphic.strokePath();
+
+        // Add inner glow
+        this.prismGraphic.fillStyle(0xffffff, 0.4);
+        this.prismGraphic.fillCircle(0, 0, size * 0.4);
+
+        // Create orbital trail effect
+        this.createPrismTrail();
+    }
+
+    /**
+     * Create continuous trail effect for orbiting prism
+     */
+    createPrismTrail() {
+        const trailEvent = this.scene.time.addEvent({
+            delay: 50,
+            callback: () => {
+                if (!this.prismActive || !this.prismGraphic) {
+                    trailEvent.remove();
+                    return;
+                }
+
+                // Rainbow colors cycling
+                const colors = [0xff0000, 0xff9900, 0xffff00, 0x00ff00, 0x00ffff, 0x0099ff, 0x9900ff];
+                const colorIndex = Math.floor((Date.now() / 100) % colors.length);
+                const color = colors[colorIndex];
+
+                const trail = this.scene.add.circle(
+                    this.prismGraphic.x,
+                    this.prismGraphic.y,
+                    4,
+                    color,
+                    0.6
+                );
+                trail.setDepth(this.prismGraphic.depth - 1);
+
+                this.scene.tweens.add({
+                    targets: trail,
+                    alpha: 0,
+                    scale: 0.2,
+                    duration: 400,
+                    ease: 'Power2',
+                    onComplete: () => trail.destroy()
+                });
+            },
+            loop: true
+        });
+    }
+
+    /**
+     * Check all projectiles near prism and split them
+     */
+    checkProjectilesNearPrism(prismX, prismY, time) {
+        const projectiles = this.scene.projectiles.getChildren();
+
+        for (const projectile of projectiles) {
+            if (!projectile.active) continue;
+            if (this.processedProjectiles.has(projectile)) continue; // Already processed
+
+            // CRITICAL: Only split ALLIED projectiles (player + minions), NOT enemy projectiles
+            if (projectile.isEnemyProjectile) continue;
+
+            // Calculate distance to prism
+            const dist = Phaser.Math.Distance.Between(
+                projectile.x, projectile.y,
+                prismX, prismY
+            );
+
+            // If projectile is close enough, split it
+            if (dist < this.prismDetectionRadius) {
+                this.splitProjectile(projectile, time);
+                this.processedProjectiles.add(projectile); // Mark as processed
+            }
+        }
+    }
+
+    /**
+     * Split a projectile into 3 projectiles (center + ±25° spread)
+     */
+    splitProjectile(originalProjectile, time) {
+        const player = this.scene.player;
+
+        // Get original projectile properties
+        const originalAngle = originalProjectile.rotation;
+        // CRITICAL FIX: Projectiles use custom velocityX/velocityY, not physics body
+        const originalSpeed = Math.sqrt(
+            originalProjectile.velocityX ** 2 +
+            originalProjectile.velocityY ** 2
+        );
+        const originalDamage = originalProjectile.damage || 10;
+
+        // Angles for the 3 projectiles (center, left, right)
+        const spreadAngle = 25 * (Math.PI / 180); // 25 degrees in radians
+        const angles = [
+            originalAngle, // Center (unchanged)
+            originalAngle - spreadAngle, // Left
+            originalAngle + spreadAngle // Right
+        ];
+
+        // Colors for visual distinction
+        const colors = [0xffffff, 0xff00ff, 0x00ffff]; // White, magenta, cyan
+
+        // CRITICAL FIX: Spawn new projectiles AHEAD of the prism
+        // Calculate spawn offset (push them forward in their direction)
+        const spawnOffset = 100; // Distance ahead of prism (increased to prevent getting stuck)
+
+        // Create 3 new projectiles
+        const newProjectiles = [];
+        for (let i = 0; i < 3; i++) {
+            const angle = angles[i];
+
+            // Calculate spawn position AHEAD in the direction of travel
+            const spawnX = originalProjectile.x + Math.cos(angle) * spawnOffset;
+            const spawnY = originalProjectile.y + Math.sin(angle) * spawnOffset;
+
+            // Create new projectile at offset position
+            const Projectile = this.scene.projectiles.classType;
+            const newProj = new Projectile(
+                this.scene,
+                spawnX,
+                spawnY,
+                'arrow'
+            );
+
+            // Add to group
+            this.scene.projectiles.add(newProj);
+
+            // Set properties
+            newProj.setFrame(0);
+            newProj.damage = originalDamage * 0.7; // 70% damage each
+            newProj.rotation = angle;
+            newProj.setTint(colors[i]);
+
+            // CRITICAL: Reset all stuck states (prevent arrows from being frozen)
+            newProj.stuckToEnemy = null;
+            newProj.stuckOffsetX = 0;
+            newProj.stuckOffsetY = 0;
+            newProj.stuckToHut = null;
+            newProj.stuckToGround = false;
+
+            // Enable ricochet if player has it
+            if (player.ricochetEnabled) {
+                newProj.ricochetEnabled = true;
+            }
+
+            // Set velocity
+            const velocityX = Math.cos(angle) * originalSpeed;
+            const velocityY = Math.sin(angle) * originalSpeed;
+            newProj.setVelocity(velocityX, velocityY);
+
+            // Initialize prevX/prevY for raycast collision detection
+            newProj.prevX = newProj.x;
+            newProj.prevY = newProj.y;
+
+            // Mark as already processed (don't split again)
+            this.processedProjectiles.add(newProj);
+
+            newProjectiles.push(newProj);
+        }
+
+        // Create split visual effect
+        this.createPrismSplitEffect(originalProjectile.x, originalProjectile.y);
+
+        // Destroy original projectile
+        originalProjectile.destroy();
+
+        console.log('💎 Projectile SPLIT into 3!');
+    }
+
+    /**
+     * Create visual effect when prism splits a projectile
+     */
+    createPrismSplitEffect(x, y) {
+        // Flash at split point
+        const flash = this.scene.add.circle(x, y, 12, 0xffffff, 0.9);
+        flash.setDepth(100);
+
+        this.scene.tweens.add({
+            targets: flash,
+            scale: 2.5,
+            alpha: 0,
+            duration: 300,
+            ease: 'Power2',
+            onComplete: () => flash.destroy()
+        });
+
+        // Rainbow ring
+        const ring = this.scene.add.graphics();
+        ring.lineStyle(3, 0x00ffff, 0.8);
+        ring.strokeCircle(x, y, 8);
+        ring.setDepth(100);
+
+        this.scene.tweens.add({
+            targets: ring,
+            scaleX: 2,
+            scaleY: 2,
+            alpha: 0,
+            duration: 400,
+            ease: 'Power2',
+            onComplete: () => ring.destroy()
+        });
+
+        // Sparkle particles
+        for (let i = 0; i < 8; i++) {
+            const angle = (Math.PI * 2 * i) / 8;
+            const colors = [0xff0000, 0xff9900, 0xffff00, 0x00ff00, 0x00ffff, 0x0099ff, 0x9900ff];
+            const color = colors[i % colors.length];
+
+            const particle = this.scene.add.circle(x, y, 3, color, 0.9);
+            particle.setDepth(100);
+
+            const distance = Phaser.Math.Between(15, 30);
+            this.scene.tweens.add({
+                targets: particle,
+                x: x + Math.cos(angle) * distance,
+                y: y + Math.sin(angle) * distance,
+                alpha: 0,
+                scale: 0,
+                duration: 300,
+                ease: 'Power2',
+                onComplete: () => particle.destroy()
+            });
+        }
+    }
+
+    /**
+     * Create prism activation effect - CLEAN VERSION
+     */
+    createPrismActivationEffect(x, y) {
+        // Single rainbow ring expanding
+        const ring = this.scene.add.graphics();
+        ring.lineStyle(4, 0x00ffff, 0.9);
+        ring.strokeCircle(x, y, 20);
+
+        this.scene.tweens.add({
+            targets: ring,
+            scaleX: 3,
+            scaleY: 3,
+            alpha: 0,
+            duration: 500,
+            ease: 'Power2',
+            onComplete: () => ring.destroy()
+        });
+
+        // Bright central flash
+        const flash = this.scene.add.circle(x, y, 15, 0xffffff, 1);
+
+        this.scene.tweens.add({
+            targets: flash,
+            scale: 2.5,
+            alpha: 0,
+            duration: 300,
+            ease: 'Power3',
+            onComplete: () => flash.destroy()
+        });
+
+        // Rainbow sparkles (fewer, cleaner)
+        const colors = [0xff0000, 0xffff00, 0x00ff00, 0x00ffff, 0xff00ff];
+        for (let i = 0; i < 12; i++) {
+            const angle = (Math.PI * 2 * i) / 12;
+            const color = colors[i % colors.length];
+            const sparkle = this.scene.add.circle(x, y, 4, color, 0.9);
+
+            const distance = Phaser.Math.Between(30, 60);
+            this.scene.tweens.add({
+                targets: sparkle,
+                x: x + Math.cos(angle) * distance,
+                y: y + Math.sin(angle) * distance,
+                alpha: 0,
+                scale: 0.2,
+                duration: 400,
+                ease: 'Power2',
+                onComplete: () => sparkle.destroy()
+            });
+        }
+
+        // Light camera shake
+        this.scene.cameras.main.shake(150, 0.003);
+    }
+
+    /**
+     * Deactivate prism
+     */
+    deactivatePrism() {
+        this.prismActive = false;
+        this.processedProjectiles.clear();
+
+        const player = this.scene.player;
+
+        // Destroy prism graphic
+        if (this.prismGraphic) {
+            // Fade out animation
+            this.scene.tweens.add({
+                targets: this.prismGraphic,
+                alpha: 0,
+                scale: 0,
+                duration: 300,
+                onComplete: () => {
+                    if (this.prismGraphic) {
+                        this.prismGraphic.destroy();
+                        this.prismGraphic = null;
+                    }
+                }
+            });
+        }
+
+        console.log('💎 Prism deactivated');
+    }
+
+    /**
+     * INFINITY ARROWS ABILITY (C) - 2.5x fire rate for 2 seconds (ULTIMATE)
+     */
+    infinityArrows(time) {
+        if (!this.canUseAbility('infinityArrows', time)) return false;
+
+        const player = this.scene.player;
+
+        // Store original fire rate
+        if (this.scene.autoFireSystem) {
+            this.originalAutoFireCooldown = this.scene.autoFireSystem.fireRate;
+        }
+
+        // Activate infinity arrows
+        this.infinityArrowsActive = true;
+        this.infinityArrowsEndTime = time + this.abilities.infinityArrows.duration;
+
+        // Set flag on player so AutoFireSystem can bypass animation delay
+        player.infinityArrowsActive = true;
+
+        // Apply 2.5x fire rate multiplier (affects both player and minions)
+        player.fireRateMultiplier = 2.5;
+        if (this.scene.autoFireSystem) {
+            this.scene.autoFireSystem.fireRate = this.originalAutoFireCooldown / 2.5;
+        }
+
+        // Reduce damage by 30% to balance fire rate boost
+        player.damageMultiplier = 0.7;
+
+        // Create subtle activation effects (just rings, no aura)
+        this.createInfinityArrowsActivationEffect(player.x, player.y);
+
+        // Schedule deactivation
+        this.scene.time.delayedCall(this.abilities.infinityArrows.duration, () => {
+            this.deactivateInfinityArrows();
+        });
+
+        this.abilities.infinityArrows.lastUsed = time;
+        console.log('♾️ INFINITY ARROWS ACTIVATED! Fire rate: 2.5x, Damage: -30% for 2 seconds (affects player + minions)!');
+        return true;
+    }
+
+    /**
+     * Create subtle activation effect for Infinity Arrows (just rings)
+     */
+    createInfinityArrowsActivationEffect(x, y) {
+        // Simple expanding rings - subtle effect
+        for (let i = 0; i < 3; i++) {
+            this.scene.time.delayedCall(i * 50, () => {
+                const ring = this.scene.add.circle(x, y, 20, 0xFFD700, 0);
+                ring.setStrokeStyle(2, 0xFFFFFF, 0.7);
+                ring.setDepth(1000);
+
+                this.scene.tweens.add({
+                    targets: ring,
+                    radius: 200,
+                    alpha: 0,
+                    duration: 600,
+                    ease: 'Power2',
+                    onComplete: () => ring.destroy()
+                });
+            });
+        }
+    }
+
+    /**
+     * Create visual aura for Infinity Arrows mode
+     */
+    createInfinityArrowsAura() {
+        const player = this.scene.player;
+
+        // Create glowing golden aura container
+        this.infinityArrowsGraphic = this.scene.add.container(player.x, player.y);
+        this.infinityArrowsGraphic.setDepth(player.depth - 1);
+
+        // Multiple rotating rings
+        for (let i = 0; i < 3; i++) {
+            const ring = this.scene.add.circle(0, 0, 40 + i * 15, 0xFFD700, 0);
+            ring.setStrokeStyle(2, 0xFFFFFF, 0.6 - i * 0.15);
+            this.infinityArrowsGraphic.add(ring);
+
+            // Rotate each ring at different speeds
+            this.scene.tweens.add({
+                targets: ring,
+                angle: 360,
+                duration: 2000 - i * 500,
+                repeat: -1,
+                ease: 'Linear'
+            });
+        }
+
+        // Add infinity symbol
+        const infinityText = this.scene.add.text(0, 0, '∞', {
+            fontSize: '48px',
+            fontFamily: 'Arial',
+            color: '#FFD700',
+            stroke: '#FFFFFF',
+            strokeThickness: 3
+        });
+        infinityText.setOrigin(0.5);
+        infinityText.setAlpha(0.8);
+        this.infinityArrowsGraphic.add(infinityText);
+
+        // Pulse animation for infinity symbol
+        this.scene.tweens.add({
+            targets: infinityText,
+            scale: 1.2,
+            alpha: 1,
+            duration: 300,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
+
+        // Continuous sparkles
+        this.createInfinityArrowsSparkles();
+    }
+
+    /**
+     * Create continuous sparkles for Infinity Arrows aura
+     */
+    createInfinityArrowsSparkles() {
+        const player = this.scene.player;
+
+        const sparkleInterval = this.scene.time.addEvent({
+            delay: 50,
+            callback: () => {
+                if (!this.infinityArrowsActive) {
+                    sparkleInterval.destroy();
+                    return;
+                }
+
+                // Random sparkles around player
+                for (let i = 0; i < 3; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const distance = 30 + Math.random() * 40;
+                    const x = player.x + Math.cos(angle) * distance;
+                    const y = player.y + Math.sin(angle) * distance;
+
+                    const sparkle = this.scene.add.circle(x, y, 2 + Math.random() * 3, 0xFFFFFF);
+                    sparkle.setDepth(1000);
+                    sparkle.setAlpha(0.8);
+
+                    this.scene.tweens.add({
+                        targets: sparkle,
+                        alpha: 0,
+                        scale: 0,
+                        y: y - 20,
+                        duration: 400,
+                        ease: 'Power2',
+                        onComplete: () => sparkle.destroy()
+                    });
+                }
+            },
+            loop: true
+        });
+    }
+
+    /**
+     * Deactivate Infinity Arrows
+     */
+    deactivateInfinityArrows() {
+        this.infinityArrowsActive = false;
+
+        const player = this.scene.player;
+
+        // Clear flag on player
+        player.infinityArrowsActive = false;
+
+        // Restore original fire rate multiplier (for minions)
+        player.fireRateMultiplier = 1.0;
+
+        // Restore original damage multiplier
+        player.damageMultiplier = 1.0;
+
+        // Restore original fire rate
+        if (this.scene.autoFireSystem && this.originalAutoFireCooldown !== null) {
+            this.scene.autoFireSystem.fireRate = this.originalAutoFireCooldown;
+            this.originalAutoFireCooldown = null;
+        }
+
+        // Destroy aura graphic
+        if (this.infinityArrowsGraphic) {
+            this.scene.tweens.add({
+                targets: this.infinityArrowsGraphic,
+                alpha: 0,
+                scale: 0,
+                duration: 300,
+                onComplete: () => {
+                    if (this.infinityArrowsGraphic) {
+                        this.infinityArrowsGraphic.destroy();
+                        this.infinityArrowsGraphic = null;
+                    }
+                }
+            });
+        }
+
+        // Deactivation effect
+        this.createInfinityArrowsDeactivationEffect(player.x, player.y);
+
+        console.log('♾️ Infinity Arrows deactivated');
+    }
+
+    /**
+     * Create deactivation effect for Infinity Arrows
+     */
+    createInfinityArrowsDeactivationEffect(x, y) {
+        // Collapsing ring
+        const ring = this.scene.add.circle(x, y, 100, 0xFFD700, 0);
+        ring.setStrokeStyle(3, 0xFFFFFF, 0.8);
+        ring.setDepth(1000);
+
+        this.scene.tweens.add({
+            targets: ring,
+            radius: 0,
+            alpha: 0,
+            duration: 300,
+            ease: 'Power2',
+            onComplete: () => ring.destroy()
+        });
+
+        // Particle implosion
+        for (let i = 0; i < 20; i++) {
+            const angle = (i / 20) * Math.PI * 2;
+            const distance = 80;
+            const startX = x + Math.cos(angle) * distance;
+            const startY = y + Math.sin(angle) * distance;
+
+            const particle = this.scene.add.circle(startX, startY, 3, 0xFFD700);
+            particle.setDepth(1000);
+
+            this.scene.tweens.add({
+                targets: particle,
+                x: x,
+                y: y,
+                alpha: 0,
+                duration: 250,
+                ease: 'Power2',
+                onComplete: () => particle.destroy()
+            });
+        }
     }
 }

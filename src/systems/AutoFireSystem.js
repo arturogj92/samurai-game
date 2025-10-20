@@ -8,7 +8,7 @@ export default class AutoFireSystem {
     constructor(scene) {
         this.scene = scene;
         this.lastFireTime = 0;
-        this.fireRate = 500; // ms between shots
+        this.fireRate = 350; // 🔥 ms between shots (was 500ms, now 350ms = +43% faster!)
         this.range = 320; // pixels - range for auto-fire
         this.enabled = true;
         this.isFiring = false; // Track if currently in a firing animation
@@ -17,11 +17,24 @@ export default class AutoFireSystem {
     update(time) {
         if (!this.enabled) return;
 
-        // Don't start new shot if already firing
-        if (this.isFiring) return;
+        // Don't start new shot if already firing (UNLESS infinity arrows is active - then spam arrows!)
+        if (this.isFiring && !this.scene.player.infinityArrowsActive) return;
+
+        // Calculate effective fire rate (apply rapid fire multiplier if active)
+        let effectiveFireRate = this.fireRate;
+
+        // 🔥 Apply player power scaling bonus (fire rate increases with level)
+        if (this.scene.difficultySystem) {
+            const playerPower = this.scene.difficultySystem.getPlayerPowerScaling();
+            effectiveFireRate = effectiveFireRate * (1 - playerPower.fireRateBonus); // Lower cooldown = faster
+        }
+
+        if (this.scene.abilitySystem && this.scene.abilitySystem.rapidFireActive) {
+            effectiveFireRate = effectiveFireRate / 5; // 5x fire rate = 1/5 cooldown
+        }
 
         // Check cooldown
-        if (time - this.lastFireTime < this.fireRate) return;
+        if (time - this.lastFireTime < effectiveFireRate) return;
 
         // Find nearest target (enemy or hut)
         const target = this.findNearestTarget();
@@ -100,10 +113,17 @@ export default class AutoFireSystem {
         projectile.stuckOffsetY = 0;
 
         // Set damage and speed (apply player damage multiplier for berserker mode)
-        const baseDamage = 20;
+        let baseDamage = 25; // 🔥 Increased from 20 to 25 (+25% damage!)
+
+        // 🔥 Apply player power scaling bonus (damage increases with level)
+        if (this.scene.difficultySystem) {
+            const playerPower = this.scene.difficultySystem.getPlayerPowerScaling();
+            baseDamage = baseDamage * (1 + playerPower.damageBonus); // Higher damage with level
+        }
+
         const damageMultiplier = this.scene.player.damageMultiplier || 1.0;
         projectile.damage = baseDamage * damageMultiplier;
-        const speed = 320; // Reduced from 400 for better visibility
+        const speed = 400; // 🔥 Increased from 320 to 400 (+25% speed for more impact!)
 
         const velocityX = Math.cos(angle) * speed;
         const velocityY = Math.sin(angle) * speed;
@@ -112,6 +132,11 @@ export default class AutoFireSystem {
 
         // Rotate arrow to point in direction of movement
         projectile.rotation = angle;
+
+        // Enable ricochet if player has the ability
+        if (this.scene.player.ricochetEnabled) {
+            projectile.ricochetEnabled = true;
+        }
 
         // Use normal blend mode (no glow)
         projectile.setBlendMode(Phaser.BlendModes.NORMAL);
@@ -190,12 +215,24 @@ export default class AutoFireSystem {
         // Play the animation
         player.play(animKey, true);
 
+        // Speed up animation during rapid fire or infinity arrows
+        if (player.infinityArrowsActive) {
+            player.anims.timeScale = 2.5; // 2.5x faster animation
+        } else if (this.scene.abilitySystem && this.scene.abilitySystem.rapidFireActive) {
+            player.anims.timeScale = 3.0; // 3x faster animation for rapid fire (even faster than infinity!)
+        } else {
+            player.anims.timeScale = 1; // Normal speed
+        }
+
         // Mark that we're shooting
         player.isShooting = true;
 
         // After animation completes
         player.once(`animationcomplete-${animKey}`, () => {
             player.isShooting = false;
+
+            // Restore normal animation speed (so walk/idle animations aren't affected)
+            player.anims.timeScale = 1;
 
             // Call the callback to spawn projectile
             if (onComplete) {

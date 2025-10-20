@@ -2,31 +2,26 @@
  * AbilityBarUI
  * Displays ability icons with cooldown indicators
  */
+import { getAbility } from '../config/AbilityPool.js';
+
 export default class AbilityBarUI {
     constructor(scene, abilitySystem) {
         this.scene = scene;
         this.abilitySystem = abilitySystem;
 
-        // Ability configuration (icon, key, ability name in system)
-        this.abilities = [
-            { icon: 'skill-dash', key: 'Q', name: 'dash' },
-            { icon: 'skill-burst', key: 'E', name: 'burst' },
-            { icon: 'skill-shield', key: 'R', name: 'shield' },
-            { icon: 'skill-lightning', key: 'X', name: 'chainLightning' },
-            { icon: 'skill-berserker', key: 'Z', name: 'berserker' },
-            { icon: 'skill-summon-army', key: 'F', name: 'summon' }
-        ];
+        // 5 ability slots (Q, E, R, T, F)
+        this.slots = ['Q', 'E', 'R', 'T', 'F'];
 
         // UI configuration - larger icons for better visibility
-        this.iconSize = 60;
-        this.iconSpacing = 75;
+        this.iconSize = 85;
+        this.iconSpacing = 90;
 
         // Center the ability bar at bottom of screen (very bottom)
-        const totalWidth = (this.abilities.length * this.iconSpacing) - (this.iconSpacing - this.iconSize);
+        const totalWidth = (this.slots.length * this.iconSpacing) - (this.iconSpacing - this.iconSize);
         this.startX = (this.scene.cameras.main.width - totalWidth) / 2;
         this.startY = this.scene.cameras.main.height - 50;
 
-        // Store UI elements for each ability
+        // Store UI elements for each slot
         this.abilityIcons = [];
 
         this.createAbilityBar();
@@ -36,47 +31,45 @@ export default class AbilityBarUI {
      * Create the ability bar UI
      */
     createAbilityBar() {
-        this.abilities.forEach((ability, index) => {
+        this.slots.forEach((slotKey, index) => {
             const x = this.startX + (index * this.iconSpacing);
             const y = this.startY;
 
-            // Create container for this ability icon
+            // Create container for this ability slot
             const container = this.scene.add.container(x, y);
             container.setScrollFactor(0); // Fixed to camera
             container.setDepth(10000); // Always on top of everything (UI layer)
 
-            // Ability icon (no background)
-            const icon = this.scene.add.image(0, 0, ability.icon);
+            // Get ability assigned to this slot (or null if empty)
+            const abilityId = this.scene.gameState.abilitySlots[slotKey];
+            const abilityData = abilityId ? getAbility(abilityId) : null;
+
+            // Ability icon (or empty slot icon)
+            const iconTexture = abilityData ? abilityData.icon : 'skill-dash'; // Default empty icon
+            const icon = this.scene.add.image(0, 0, iconTexture);
             icon.setDisplaySize(this.iconSize, this.iconSize);
             container.add(icon);
 
-            // Cooldown overlay (progressive unlock effect left-to-right)
-            const cooldownOverlay = this.scene.add.rectangle(
-                0,
-                0,
-                this.iconSize,
-                this.iconSize,
-                0x000000,
-                0.85
-            );
+            // Cooldown overlay (circular to match rounded icons)
+            const cooldownOverlay = this.scene.add.circle(0, 0, this.iconSize/2, 0x000000, 0.6);
             cooldownOverlay.setVisible(false);
             container.add(cooldownOverlay);
 
-            // Cooldown timer at bottom
-            const cooldownTimerText = this.scene.add.text(0, this.iconSize/2 - 10, '', {
-                fontSize: '11px',
+            // Cooldown timer (centered)
+            const cooldownTimerText = this.scene.add.text(0, 0, '', {
+                fontSize: '24px',
                 fontFamily: 'Arial',
                 fontStyle: 'bold',
                 color: '#ffffff',
                 stroke: '#000000',
-                strokeThickness: 2
+                strokeThickness: 4
             });
             cooldownTimerText.setOrigin(0.5, 0.5);
             cooldownTimerText.setVisible(false);
             container.add(cooldownTimerText);
 
             // Key label - sized to match icon
-            const keyText = this.scene.add.text(-this.iconSize/2 + 6, -this.iconSize/2 + 6, ability.key, {
+            const keyText = this.scene.add.text(-this.iconSize/2 + 6, -this.iconSize/2 + 6, slotKey, {
                 fontSize: '18px',
                 fontFamily: 'Arial',
                 fontStyle: 'bold',
@@ -86,6 +79,36 @@ export default class AbilityBarUI {
             });
             container.add(keyText);
 
+            // Lock overlay for empty slots (dark overlay + lock icon)
+            const lockOverlay = this.scene.add.rectangle(
+                0,
+                0,
+                this.iconSize,
+                this.iconSize,
+                0x000000,
+                0.7
+            );
+            container.add(lockOverlay);
+
+            // Lock icon text (🔒 emoji)
+            const lockIcon = this.scene.add.text(0, 0, '🔒', {
+                fontSize: '32px'
+            });
+            lockIcon.setOrigin(0.5, 0.5);
+            container.add(lockIcon);
+
+            // Empty slot text
+            const emptyText = this.scene.add.text(0, this.iconSize/2 - 15, 'EMPTY', {
+                fontSize: '14px',
+                fontFamily: 'Arial',
+                fontStyle: 'bold',
+                color: '#888888',
+                stroke: '#000000',
+                strokeThickness: 3
+            });
+            emptyText.setOrigin(0.5, 0.5);
+            container.add(emptyText);
+
             // Store references
             this.abilityIcons.push({
                 container,
@@ -93,7 +116,11 @@ export default class AbilityBarUI {
                 cooldownOverlay,
                 cooldownTimerText,
                 keyText,
-                abilityName: ability.name
+                lockOverlay,
+                lockIcon,
+                emptyText,
+                slotKey: slotKey,
+                abilityId: abilityId // Can be null if empty
             });
         });
     }
@@ -106,40 +133,74 @@ export default class AbilityBarUI {
         const currentTime = this.scene.time.now;
 
         this.abilityIcons.forEach((abilityUI) => {
-            const ability = this.abilitySystem.abilities[abilityUI.abilityName];
+            // Get current ability ID from gameState slot
+            const currentAbilityId = this.scene.gameState.abilitySlots[abilityUI.slotKey];
 
-            // Use getCooldownPercent() which accounts for berserker mode (4x faster cooldowns)
-            const cooldownPercent = this.abilitySystem.getCooldownPercent(abilityUI.abilityName);
+            // If slot is empty
+            if (!currentAbilityId) {
+                // Show lock overlay for empty slots
+                abilityUI.lockOverlay.setVisible(true);
+                abilityUI.lockIcon.setVisible(true);
+                abilityUI.emptyText.setVisible(true);
+
+                // Hide cooldown elements
+                abilityUI.cooldownOverlay.setVisible(false);
+                abilityUI.cooldownTimerText.setVisible(false);
+
+                // Desaturate icon
+                abilityUI.icon.setTint(0x444444);
+                return;
+            }
+
+            // Update icon if ability changed
+            if (currentAbilityId !== abilityUI.abilityId) {
+                abilityUI.abilityId = currentAbilityId;
+                const abilityData = getAbility(currentAbilityId);
+                if (abilityData) {
+                    abilityUI.icon.setTexture(abilityData.icon);
+                }
+            }
+
+            // Hide lock overlay - slot has an ability
+            abilityUI.lockOverlay.setVisible(false);
+            abilityUI.lockIcon.setVisible(false);
+            abilityUI.emptyText.setVisible(false);
+
+            // Get ability from system
+            const ability = this.abilitySystem.abilities[currentAbilityId];
+
+            if (!ability) {
+                // Ability not in system yet, show at full color
+                abilityUI.icon.clearTint();
+                abilityUI.cooldownOverlay.setVisible(false);
+                abilityUI.cooldownTimerText.setVisible(false);
+                return;
+            }
+
+            // Check cooldown
+            const cooldownPercent = this.abilitySystem.getCooldownPercent(currentAbilityId);
             const isOnCooldown = cooldownPercent < 1;
 
-            // Calculate actual time remaining for display
-            const timeSinceUse = currentTime - ability.lastUsed;
-            const cooldownRemaining = ability.cooldown - timeSinceUse;
-
             if (isOnCooldown) {
-                // cooldownPercent already calculated above with berserker acceleration
-
-                // Calculate overlay width (shrinks as cooldown progresses)
-                const overlayWidth = this.iconSize * (1 - cooldownPercent);
-
-                // Calculate X position (overlay moves from left to right)
-                // Keep left edge fixed at left of icon
-                const overlayX = -this.iconSize/2 + overlayWidth/2;
-
-                // Update overlay size and position (left-to-right)
-                abilityUI.cooldownOverlay.setSize(overlayWidth, this.iconSize);
-                abilityUI.cooldownOverlay.x = overlayX;
+                // Show circular overlay with fade effect
                 abilityUI.cooldownOverlay.setVisible(true);
 
-                // Calculate effective time remaining (accounts for berserker 4x speed)
-                // cooldownPercent is already accelerated, so we calculate effective time
+                // Fade from 0.6 (semi-dark) to 0 (transparent) as cooldown progresses
+                // This way you can always see the icon underneath
+                const overlayAlpha = 0.6 * (1 - cooldownPercent);
+                abilityUI.cooldownOverlay.setAlpha(overlayAlpha);
+
+                // Calculate effective time remaining
                 const effectiveTimeRemaining = (1 - cooldownPercent) * ability.cooldown;
                 const secondsRemaining = (effectiveTimeRemaining / 1000).toFixed(1);
-                abilityUI.cooldownTimerText.setText(secondsRemaining + 's');
+                abilityUI.cooldownTimerText.setText(secondsRemaining);
                 abilityUI.cooldownTimerText.setVisible(true);
 
-                // Desaturate icon when on cooldown
-                abilityUI.icon.setTint(0x666666);
+                // Desaturate icon when on cooldown (gradually gets brighter)
+                // Goes from 0x88 (medium gray) to 0xFF (full brightness)
+                const tintBrightness = 0x88 + Math.floor((0xFF - 0x88) * cooldownPercent);
+                const tintColor = (tintBrightness << 16) | (tintBrightness << 8) | tintBrightness;
+                abilityUI.icon.setTint(tintColor);
             } else {
                 // Ready - hide overlay and timer
                 abilityUI.cooldownOverlay.setVisible(false);
