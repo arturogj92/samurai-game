@@ -50,9 +50,6 @@ export default class MainScene extends Phaser.Scene {
         // Start tracking level statistics
         this.levelSystem.startLevel();
 
-        // Generate random shop abilities for this level
-        this.generateShopAbilities();
-
         // Set custom cursor (crosshair style)
         this.input.setDefaultCursor('crosshair');
 
@@ -93,6 +90,9 @@ export default class MainScene extends Phaser.Scene {
             availableAbilitiesThisLevel: [], // 3 random abilities shown in shop this level
             hasChosenStartingAbility: false // Track if player chose starting ability
         };
+
+        // Generate random shop abilities for this level (after gameState is initialized)
+        this.generateShopAbilities();
 
         // PERFORMANCE: Global enemy limit to prevent FPS degradation
         this.MAX_ENEMIES = 50; // Maximum concurrent enemies (prevents infinite spawning lag)
